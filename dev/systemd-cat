@@ -1,0 +1,6 @@
+#!/bin/bash
+# Stand-in for systemd-cat (no journal in the container): drop the options
+# before "--" and append the command's output to /tmp/omarchy-shell.log.
+while (( $# > 0 )) && [[ $1 != "--" ]]; do shift; done
+shift
+exec "$@" >>/tmp/omarchy-shell.log 2>&1
