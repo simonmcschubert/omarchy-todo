@@ -1,0 +1,61 @@
+#!/usr/bin/env bash
+# Adds Task's keyboard shortcuts and app launcher entry. Run once after
+# `omarchy plugin add`; running it again changes nothing. `setup --remove`
+# takes both out again.
+set -euo pipefail
+
+ID=simonmcschubert.todo
+BINDINGS="${XDG_CONFIG_HOME:-$HOME/.config}/hypr/bindings.lua"
+DESKTOP_FILE="${XDG_DATA_HOME:-$HOME/.local/share}/applications/omarchy-todo.desktop"
+BEGIN="-- omarchy-todo: begin"
+END="-- omarchy-todo: end"
+
+fail() {
+  echo "setup: $*" >&2
+  exit 1
+}
+
+remove_bindings() {
+  [[ -f $BINDINGS ]] || return 0
+  sed -i "/^$BEGIN\$/,/^$END\$/d" "$BINDINGS"
+}
+
+case ${1:-} in
+  "") ;;
+  --remove)
+    remove_bindings
+    rm -f "$DESKTOP_FILE"
+    echo "Removed Task's shortcuts and launcher entry."
+    exit 0
+    ;;
+  -h | --help)
+    echo "Usage: setup [--remove]"
+    exit 0
+    ;;
+  *) fail "unknown option: $1" ;;
+esac
+
+[[ -f $BINDINGS ]] || fail "$BINDINGS not found; is this Omarchy?"
+
+remove_bindings
+cat >>"$BINDINGS" <<EOF
+$BEGIN
+o.bind("SUPER + ALT + T", "Task", { panel = "$ID" })
+o.bind("SUPER + SHIFT + ALT + T", "Task window", "omarchy-shell shell summon $ID window")
+$END
+EOF
+
+mkdir -p "$(dirname "$DESKTOP_FILE")"
+cat >"$DESKTOP_FILE" <<EOF
+[Desktop Entry]
+Type=Application
+Name=Task
+Comment=To-do list with due dates and starred tasks
+Exec=omarchy-shell shell summon $ID window
+Icon=checkbox-checked-symbolic
+Terminal=false
+Categories=Utility;
+EOF
+
+echo "Shortcuts: Super+Alt+T (drop-down), Super+Shift+Alt+T (window)."
+echo "App launcher: Task."

@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "id": "simonmcschubert.todo",
+  "name": "Task",
+  "version": "0.1.0",
+  "author": "Simon Schubert",
+  "description": "To-do list with due dates and starred tasks, as a drop-down panel and an app window. Drop-down: omarchy-shell shell toggle simonmcschubert.todo. Window: omarchy-shell shell summon simonmcschubert.todo window",
+  "kinds": [
+    "panel"
+  ],
+  "keepLoaded": true,
+  "entryPoints": {
+    "panel": "Main.qml"
+  }
+}

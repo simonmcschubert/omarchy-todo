@@ -1,0 +1,88 @@
+#!/usr/bin/env python3
+"""Persistent virtual pointer for the headless desktop.
+
+Short-lived virtual pointers (like wlrctl's) come and go before clients
+notice them, so their clicks are lost. This one stays connected and reads
+commands from a FIFO: "move X Y" (absolute, in output pixels), "click",
+"scroll DY".
+Usage: pointer FIFO WIDTH HEIGHT
+"""
+import os
+import sys
+import tempfile
+import time
+
+from pywayland.client import Display
+from pywayland.scanner import Protocol
+
+PROTOCOLS = [
+    "/usr/share/wayland/wayland.xml",
+    "/usr/share/wlr-protocols/unstable/wlr-virtual-pointer-unstable-v1.xml",
+]
+
+
+def load_protocols():
+    """Generates Python bindings into a temporary package named protos."""
+    root = tempfile.mkdtemp(prefix="pointer-protocols-")
+    package = os.path.join(root, "protos")
+    os.makedirs(package)
+    open(os.path.join(package, "__init__.py"), "w").close()
+    protocols = [Protocol.parse_file(p) for p in PROTOCOLS]
+    imports = {i.name: p.name for p in protocols for i in p.interface}
+    for protocol in protocols:
+        protocol.output(package, imports)
+    sys.path.insert(0, root)
+
+
+def main():
+    fifo, width, height = sys.argv[1], int(sys.argv[2]), int(sys.argv[3])
+    load_protocols()
+    from protos.wayland import WlSeat  # noqa: E402
+    from protos.wlr_virtual_pointer_unstable_v1 import ZwlrVirtualPointerManagerV1  # noqa: E402
+
+    display = Display()
+    display.connect()
+    found = {}
+
+    def on_global(registry, name, interface, version):
+        if interface == "wl_seat":
+            found["seat"] = registry.bind(name, WlSeat, 1)
+        elif interface == "zwlr_virtual_pointer_manager_v1":
+            found["manager"] = registry.bind(name, ZwlrVirtualPointerManagerV1, 1)
+
+    registry = display.get_registry()
+    registry.dispatcher["global"] = on_global
+    display.roundtrip()
+    pointer = found["manager"].create_virtual_pointer(found.get("seat"))
+    display.roundtrip()
+
+    def now():
+        return int(time.monotonic() * 1000) & 0xFFFFFFFF
+
+    if not os.path.exists(fifo):
+        os.mkfifo(fifo)
+    while True:
+        with open(fifo) as commands:
+            for line in commands:
+                parts = line.split()
+                if not parts:
+                    continue
+                if parts[0] == "move":
+                    pointer.motion_absolute(now(), int(parts[1]), int(parts[2]), width, height)
+                    pointer.frame()
+                elif parts[0] == "click":
+                    pointer.button(now(), 0x110, 1)
+                    pointer.frame()
+                    display.flush()
+                    time.sleep(0.05)
+                    pointer.button(now(), 0x110, 0)
+                    pointer.frame()
+                elif parts[0] == "scroll":
+                    pointer.axis(now(), 0, float(parts[1]))
+                    pointer.frame()
+                display.flush()
+                display.roundtrip()
+
+
+if __name__ == "__main__":
+    main()

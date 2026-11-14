@@ -1,0 +1,40 @@
+#!/bin/bash
+# Drives the headless desktop started by `desktop`.
+#   act shot FILE         screenshot (PNG)
+#   act type TEXT         type text into the focused surface
+#   act key WTYPE-ARGS    keys, e.g. act key -M ctrl 2 -m ctrl / act key -k Escape
+#   act click X Y         left click at output pixel X,Y
+#   act move X Y          move the pointer
+#   act reload            copy /plugin again and restart the shell
+#   act COMMAND...        run a command in the desktop session
+# Hyprland ignores key bindings from virtual keyboards, so test a binding
+# by running its command (see `hyprctl binds`).
+set -euo pipefail
+until [[ -f /tmp/desktop.env ]]; do sleep 0.2; done
+# shellcheck disable=SC1091
+source /tmp/desktop.env
+
+pointer() {
+  echo "$*" >/tmp/pointer.fifo
+  sleep 0.2
+}
+
+case ${1:-} in
+  shot) grim "$2" ;;
+  type) wtype -s 100 "$2" -s 100 ;;
+  key) shift; wtype -s 100 "$@" -s 100 ;;
+  click) pointer move "$2" "$3"; pointer click ;;
+  move) pointer move "$2" "$3" ;;
+  reload)
+    tar -C /plugin --exclude=.git --exclude=dev/out -cf - . |
+      tar -C ~/.config/omarchy/plugins/simonmcschubert.todo -xf -
+    # The shell keeps loaded plugin code until it restarts.
+    pkill -f '[q]uickshell -n' || true
+    sleep 0.5
+    setsid omarchy-launch-shell >/dev/null 2>&1 &
+    until omarchy-shell shell ping >/dev/null 2>&1; do sleep 0.2; done
+    sleep 1
+    ;;
+  *) exec "$@" ;;
+esac
+sleep 0.4

@@ -1,0 +1,89 @@
+#!/bin/bash
+# Starts a headless Omarchy desktop with the plugin from /plugin installed,
+# enabled, and set up. Ready when /tmp/desktop.env exists.
+set -euo pipefail
+
+export XDG_RUNTIME_DIR=/tmp/xdg
+export OMARCHY_PATH=/opt/omarchy
+export PATH="$OMARCHY_PATH/bin:$PATH"
+WIDTH=${WIDTH:-1600}
+HEIGHT=${HEIGHT:-1000}
+THEME=${THEME:-tokyo-night}
+PLUGIN_ID=simonmcschubert.todo
+
+mkdir -p "$XDG_RUNTIME_DIR"
+chmod 700 "$XDG_RUNTIME_DIR"
+
+wait_for() {
+  local tries=0
+  until eval "$1" >/dev/null 2>&1; do
+    (( ++tries > 100 )) && { echo "desktop: timed out waiting for: $1" >&2; exit 1; }
+    sleep 0.2
+  done
+}
+
+# User configuration as a fresh Omarchy install has it.
+mkdir -p ~/.config ~/.local/state/omarchy/current
+cp -rn "$OMARCHY_PATH"/config/* ~/.config/
+echo "hl.monitor({ output = \"\", mode = \"${WIDTH}x${HEIGHT}\", position = \"0x0\", scale = 1 })" > ~/.config/hypr/monitors.lua
+ln -sfn "$OMARCHY_PATH/themes/$THEME" ~/.local/state/omarchy/current/theme
+
+# The plugin under test, as `omarchy plugin add` would place it.
+if [[ -f /plugin/manifest.json ]]; then
+  mkdir -p ~/.config/omarchy/plugins/$PLUGIN_ID
+  tar -C /plugin --exclude=.git --exclude=dev/out -cf - . | tar -C ~/.config/omarchy/plugins/$PLUGIN_ID -xf -
+fi
+
+# DEMO=1 starts with demo tasks.
+if [[ ${DEMO:-0} == 1 ]]; then
+  mkdir -p ~/.local/state/omarchy-todo
+  chmod 700 ~/.local/state/omarchy-todo
+  /plugin/dev/demo-tasks > ~/.local/state/omarchy-todo/tasks.json
+fi
+
+eval "$(dbus-launch --sh-syntax)"
+mutter --headless --wayland --no-x11 --wayland-display=wayland-host \
+  --virtual-monitor "${WIDTH}x${HEIGHT}" >/tmp/mutter.log 2>&1 &
+wait_for "test -S $XDG_RUNTIME_DIR/wayland-host"
+
+WAYLAND_DISPLAY=wayland-host start-hyprland >/tmp/hyprland.log 2>&1 &
+wait_for "ls $XDG_RUNTIME_DIR/hypr/*/.socket.sock"
+sockets=("$XDG_RUNTIME_DIR"/hypr/*/.socket.sock)
+HYPRLAND_INSTANCE_SIGNATURE=$(basename "$(dirname "${sockets[0]}")")
+export HYPRLAND_INSTANCE_SIGNATURE
+wait_for "ls $XDG_RUNTIME_DIR/wayland-[0-9]"
+displays=("$XDG_RUNTIME_DIR"/wayland-[0-9])
+WAYLAND_DISPLAY=$(basename "${displays[0]}")
+export WAYLAND_DISPLAY
+
+# Hyprland's autostart launches the shell.
+wait_for "omarchy-shell shell ping"
+
+if [[ -f /plugin/manifest.json ]]; then
+  wait_for "omarchy-shell shell rescanPlugins"
+  wait_for "omarchy-plugin-list --json | jq -e 'any(.[]; .id == \"$PLUGIN_ID\")'"
+  omarchy plugin enable "$PLUGIN_ID"
+  ~/.config/omarchy/plugins/$PLUGIN_ID/setup
+  hyprctl reload >/dev/null
+fi
+
+# Virtual input devices that stay connected. Short-lived ones (one per wtype
+# or wlrctl call) come and go before clients notice them, and input is lost.
+setsid wtype -s 86400000 >/dev/null 2>&1 &
+setsid pointer /tmp/pointer.fifo "$WIDTH" "$HEIGHT" >/tmp/pointer.log 2>&1 &
+wait_for "test -p /tmp/pointer.fifo"
+
+# Clear the first-run notifications so they do not cover screenshots.
+sleep 2
+omarchy-shell -q notifications dismissAll
+
+cat > /tmp/desktop.env <<ENV
+export XDG_RUNTIME_DIR=$XDG_RUNTIME_DIR
+export OMARCHY_PATH=$OMARCHY_PATH
+export PATH="$PATH"
+export HYPRLAND_INSTANCE_SIGNATURE=$HYPRLAND_INSTANCE_SIGNATURE
+export WAYLAND_DISPLAY=$WAYLAND_DISPLAY
+export DBUS_SESSION_BUS_ADDRESS=$DBUS_SESSION_BUS_ADDRESS
+ENV
+echo "desktop ready (${WIDTH}x${HEIGHT}, theme $THEME)"
+sleep infinity
