@@ -78,24 +78,29 @@ test("parseStore accepts an empty file and refuses what it cannot read", () => {
   assert.equal(T.parseStore('{"version":1,"tasks":{}}').ok, false)
 })
 
-test("parseStore cleans tasks and drops invalid ones and duplicates", () => {
-  const text = JSON.stringify({
-    version: 1,
-    tasks: [
-      { id: "a", text: "  Call\nthe bank  ", due: "2026-11-20", starred: true, createdAt: 5, doneAt: null },
-      { id: "a", text: "Duplicate id", createdAt: 6 },
-      { id: "b", text: "   ", createdAt: 7 },
-      { id: "c d", text: "Bad id" },
-      { id: "e", text: "Bad due", due: "2026-02-30", starred: "yes", createdAt: -1, doneAt: "x" },
-      "not an object"
-    ]
-  })
-  const result = plain(T.parseStore(text))
-  assert.equal(result.ok, true)
-  assert.deepEqual(result.tasks, [
-    { id: "a", text: "Call the bank", due: "2026-11-20", starred: true, createdAt: 5, doneAt: null },
-    { id: "e", text: "Bad due", due: null, starred: false, createdAt: 0, doneAt: null }
+test("parseStore refuses a file with any task it cannot read back exactly", () => {
+  const good = { id: "a", text: "Call the bank", due: "2026-11-20", starred: true, createdAt: 5, doneAt: null }
+  const file = (...tasks) => JSON.stringify({ version: 1, tasks })
+  assert.deepEqual(plain(T.parseStore(file(good))).tasks, [good])
+  assert.deepEqual(plain(T.parseStore(file({ id: "b", text: "Short", createdAt: 7 }))).tasks, [
+    { id: "b", text: "Short", due: null, starred: false, createdAt: 7, doneAt: null }
   ])
+  const bad = [
+    "not an object",
+    { ...good, id: "c d" },
+    { ...good, text: "   " },
+    { ...good, text: "  Call the bank  " },
+    { ...good, due: "2026-02-30" },
+    { ...good, starred: "yes" },
+    { ...good, createdAt: -1 },
+    { ...good, doneAt: "x" }
+  ]
+  for (const task of bad) {
+    const result = plain(T.parseStore(file(good, task)))
+    assert.equal(result.ok, false, JSON.stringify(task))
+    assert.equal(result.error, "task 2 is not valid")
+  }
+  assert.equal(T.parseStore(file(good, { ...good, text: "Duplicate id" })).ok, false)
 })
 
 test("serialize round-trips through parseStore", () => {

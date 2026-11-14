@@ -179,15 +179,31 @@ function parseStore(text) {
     return { ok: false, tasks: [], error: "unsupported format version " + JSON.stringify(data.version) }
   }
   if (!Array.isArray(data.tasks)) return { ok: false, tasks: [], error: "tasks is not a list" }
+  if (data.tasks.length > MAX_TASKS) return { ok: false, tasks: [], error: "more than " + MAX_TASKS + " tasks" }
+  // Saving writes back only what was read, so a task that does not read back
+  // exactly would be lost or changed: refuse the whole file instead.
   var tasks = []
   var seen = {}
-  for (var i = 0; i < data.tasks.length && tasks.length < MAX_TASKS; i++) {
-    var task = normalizeTask(data.tasks[i])
-    if (!task || seen[task.id]) continue
+  for (var i = 0; i < data.tasks.length; i++) {
+    var raw = data.tasks[i]
+    var task = normalizeTask(raw)
+    if (!task || seen[task.id] || !readsBack(raw, task)) {
+      return { ok: false, tasks: [], error: "task " + (i + 1) + " is not valid" }
+    }
     seen[task.id] = true
     tasks.push(task)
   }
   return { ok: true, tasks: tasks, error: "" }
+}
+
+// Whether a stored task is exactly what normalizeTask made of it. due,
+// starred, and doneAt may be left out.
+function readsBack(raw, task) {
+  return raw.text === task.text
+    && (raw.due === undefined ? null : raw.due) === task.due
+    && (raw.starred === undefined ? false : raw.starred) === task.starred
+    && raw.createdAt === task.createdAt
+    && (raw.doneAt === undefined ? null : raw.doneAt) === task.doneAt
 }
 
 function serialize(tasks) {

@@ -62,9 +62,10 @@ Item {
     if (key !== today) today = key
   }
 
-  // The directory is private (0700). The file is only read after it exists.
+  // The directory is private (0700), also when it already exists. The file
+  // is only read after it.
   Process {
-    command: ["mkdir", "-p", "-m", "700", store.directory]
+    command: ["install", "-d", "-m", "700", store.directory]
     running: true
     onExited: function(exitCode) {
       if (exitCode !== 0) store.error = "Can't create " + store.directory + "."
