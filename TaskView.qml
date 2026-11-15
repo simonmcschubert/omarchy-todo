@@ -12,6 +12,7 @@ FocusScope {
   id: view
 
   property var store: null
+  property var updater: null
   property bool compact: false
   property bool addOnly: false
   property string tab: "open"
@@ -30,6 +31,26 @@ FocusScope {
   readonly property color dim: Util.alpha(foreground, 0.55)
 
   readonly property var rows: !store ? [] : (tab === "open" ? store.openRows : store.doneRows)
+
+  // The update button for each status of the updater (Updater.qml); null
+  // hides it.
+  readonly property var updateButton: {
+    var name = updater ? "To Do " + updater.version : ""
+    switch (updater ? updater.status : "") {
+    case "available":
+      return { icon: "", text: "Update", tip: name + " is available. Click to download it." }
+    case "downloading":
+      return { icon: "", text: "Downloading", tip: "Downloading " + name + ".", busy: true }
+    case "downloaded":
+      return { icon: "", text: "Restart to update",
+               tip: name + " is downloaded. Click to restart the Omarchy shell with it. Your tasks stay as they are." }
+    case "installing":
+      return { icon: "", text: "Updating", tip: "Installing " + name + " and restarting the shell.", busy: true }
+    case "failed":
+      return { icon: "", text: "Update failed", tip: "Can't download " + name + ". Click to try again.", failed: true }
+    }
+    return null
+  }
 
   signal closeRequested()
   signal added(string id)
@@ -127,6 +148,16 @@ FocusScope {
         onClicked: view.tab = "done"
       }
       Item { Layout.fillWidth: true }
+      Ui.Button {
+        visible: view.updateButton !== null
+        iconText: view.updateButton ? view.updateButton.icon : ""
+        iconSpinning: !!view.updateButton && view.updateButton.busy === true
+        text: view.updateButton ? view.updateButton.text : ""
+        foreground: view.updateButton && view.updateButton.failed ? view.urgent : view.accent
+        fontFamily: view.fontFamily
+        tooltipText: view.updateButton ? view.updateButton.tip : ""
+        onClicked: view.updater.act()
+      }
       Ui.Button {
         visible: view.tab === "done" && view.store && view.store.doneCount > 0
         iconText: ""

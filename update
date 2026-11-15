@@ -1,0 +1,133 @@
+#!/usr/bin/env bash
+# Finds, downloads, and installs releases of To Do. The app runs it to offer
+# updates; it works from a terminal too. A release is a vX.Y.Z tag on the
+# checkout's origin (README.md, "Releases").
+#
+#   update check            prints "current", "available X.Y.Z", or
+#                           "downloaded X.Y.Z" for the newest release
+#   update download X.Y.Z   fetches the release; changes no files
+#   update install X.Y.Z    moves this checkout to the release, checks it as
+#                           `omarchy plugin update` does (and goes back when
+#                           that fails), then restarts the shell to load it
+#   update version          prints the installed release: X.Y.Z, X.Y.Z-N-gSHA
+#                           N commits past it, or nothing before the first
+#
+# Run without a terminal (as the app does), install also reports its result
+# as a notification.
+set -euo pipefail
+
+export GIT_TERMINAL_PROMPT=0
+export GIT_SSH_COMMAND="${GIT_SSH_COMMAND:-ssh -oBatchMode=yes}"
+
+DIR=$(cd -P "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+NOTIFY=0
+
+notify() {
+  if ((NOTIFY)); then notify-send "$@" 2>/dev/null || true; fi
+}
+
+fail() {
+  local message="$*"
+  echo "update: $message" >&2
+  notify "To Do update failed" "${message^}"
+  exit 1
+}
+
+repo() {
+  git -C "$DIR" "$@"
+}
+
+# "<commit> <version>" of the newest release on origin; nothing without one.
+newest_release() {
+  local refs
+  refs=$(timeout 30 git -C "$DIR" ls-remote --tags origin) || fail "can't reach origin"
+  # An annotated tag is listed twice; its ^{} line names the commit.
+  awk '{
+      tag = $2
+      sub(/^refs\/tags\//, "", tag)
+      peeled = sub(/\^\{\}$/, "", tag)
+      if (tag !~ /^v[0-9]+[.][0-9]+[.][0-9]+$/) next
+      if (peeled || !(tag in commit)) commit[tag] = $1
+    }
+    END { for (tag in commit) print commit[tag], substr(tag, 2) }' <<<"$refs" |
+    sort -k2,2V | tail -n 1
+}
+
+downloaded() {
+  repo rev-parse --quiet --verify "refs/tags/v$1^{commit}"
+}
+
+check() {
+  local release commit version
+  release=$(newest_release)
+  if [[ -z $release ]]; then
+    echo current
+    return
+  fi
+  read -r commit version <<<"$release"
+  if repo merge-base --is-ancestor "$commit" HEAD 2>/dev/null; then
+    echo current
+  elif [[ $(downloaded "$version") == "$commit" ]]; then
+    echo "downloaded $version"
+  else
+    echo "available $version"
+  fi
+}
+
+download() {
+  downloaded "$1" >/dev/null && return
+  timeout 120 git -C "$DIR" fetch --quiet --no-tags origin "refs/tags/v$1:refs/tags/v$1" ||
+    fail "can't download To Do $1"
+}
+
+install() {
+  local version=$1 commit problems
+  [[ -t 2 ]] || NOTIFY=1
+  download "$version"
+  commit=$(downloaded "$version")
+  if ! repo merge-base --is-ancestor "$commit" HEAD; then
+    # Going back after a failed check resets the whole checkout.
+    [[ -z $(repo status --porcelain --untracked-files=no) ]] ||
+      fail "can't update to $version: $DIR has local changes"
+    repo merge --ff-only --quiet "$commit" >/dev/null 2>&1 ||
+      fail "can't update to $version: $DIR has local commits"
+    if ! problems=$(omarchy-plugin-validate "$DIR" 2>&1); then
+      repo reset --hard --quiet ORIG_HEAD
+      fail "To Do $version is not a valid plugin, so To Do stays as it was. ${problems##*$'\n'}"
+    fi
+  fi
+  omarchy-restart-shell >/dev/null ||
+    fail "To Do $version is installed, but the shell did not restart. Restart it with: omarchy restart shell"
+  echo "To Do $version is installed."
+  notify "To Do updated" "Version $version is installed."
+}
+
+version() {
+  repo describe --tags --match 'v[0-9]*.[0-9]*.[0-9]*' --exclude 'v*-*' 2>/dev/null | sed 's/^v//' || true
+}
+
+usage() {
+  echo "Usage: update check | download VERSION | install VERSION | version"
+}
+
+case ${1:-} in
+  check | version) ;;
+  download | install)
+    [[ ${2:-} =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || fail "not a release version: '${2:-}'"
+    ;;
+  -h | --help)
+    usage
+    exit 0
+    ;;
+  *)
+    usage >&2
+    exit 1
+    ;;
+esac
+
+# Only this plugin's own checkout: not a repository it happens to sit in,
+# such as one that keeps ~/.config.
+[[ $(repo rev-parse --show-toplevel 2>/dev/null) == "$DIR" ]] ||
+  fail "$DIR is not a git checkout, so there is nothing to update from"
+
+"$1" "${@:2}"
