@@ -176,7 +176,9 @@ function parseStore(text) {
     return { ok: false, tasks: [], error: "unexpected content" }
   }
   if (data.version !== FORMAT_VERSION) {
-    return { ok: false, tasks: [], error: "unsupported format version " + JSON.stringify(data.version) }
+    // Errors are reported, so they never quote the file beyond a number.
+    var version = typeof data.version === "number" ? " " + data.version : ""
+    return { ok: false, tasks: [], error: "unsupported format version" + version }
   }
   if (!Array.isArray(data.tasks)) return { ok: false, tasks: [], error: "tasks is not a list" }
   if (data.tasks.length > MAX_TASKS) return { ok: false, tasks: [], error: "more than " + MAX_TASKS + " tasks" }

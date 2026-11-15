@@ -76,6 +76,9 @@ test("parseStore accepts an empty file and refuses what it cannot read", () => {
   assert.equal(T.parseStore("[]").ok, false)
   assert.equal(T.parseStore('{"version":2,"tasks":[]}').ok, false)
   assert.equal(T.parseStore('{"version":1,"tasks":{}}').ok, false)
+  assert.equal(T.parseStore('{"version":2,"tasks":[]}').error, "unsupported format version 2")
+  // Errors are sent in error reports, so file content stays out of them.
+  assert.equal(T.parseStore('{"version":{"text":"Private task"},"tasks":[]}').error, "unsupported format version")
 })
 
 test("parseStore refuses a file with any task it cannot read back exactly", () => {

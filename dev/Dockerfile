@@ -25,4 +25,6 @@ COPY desktop act pointer systemd-cat /usr/local/bin/
 RUN useradd -m -u 1000 dev
 USER dev
 WORKDIR /home/dev
+# Error reports from here are tagged as development, not production.
+ENV SENTRY_ENVIRONMENT=development
 CMD ["desktop"]
