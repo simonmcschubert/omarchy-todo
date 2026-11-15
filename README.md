@@ -120,3 +120,7 @@ docker exec todo-dev act reload    # after a code change
 Sentry with environment `development`; add `-e DO_NOT_TRACK=1` to send none.
 `dev/act` lists all commands. Hyprland ignores shortcuts from virtual
 keyboards, so test a shortcut by running its command.
+
+## License
+
+[MIT](LICENSE)
