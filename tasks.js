@@ -347,6 +347,23 @@ function openSections(tasks, today) {
   })
 }
 
+// The Focus list: open tasks that are starred or due today, in the Starred
+// and Today sections of openSections.
+function focusSections(tasks, today) {
+  return openSections(tasks, today).filter(function(s) {
+    return s.key === "starred" || s.key === "today"
+  })
+}
+
+// Whether a task is in the Focus list.
+function inFocus(task, today) {
+  return !!task && task.doneAt === null && (task.starred || task.due === today)
+}
+
+function countFocus(tasks, today) {
+  return tasks.filter(function(t) { return inFocus(t, today) }).length
+}
+
 // Done tasks grouped by the day they were completed, newest first.
 function doneSections(tasks, today) {
   var done = tasks.filter(function(t) { return t.doneAt !== null })

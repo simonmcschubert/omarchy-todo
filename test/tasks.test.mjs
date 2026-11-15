@@ -229,6 +229,36 @@ test("open tasks: starred first, then by due date", () => {
   assert.equal(rows[1].task.id, "starOverdue")
 })
 
+test("focus: only open tasks that are starred or due today", () => {
+  const tasks = [
+    task({ id: "none" }),
+    task({ id: "overdue", due: "2026-11-01" }),
+    task({ id: "today2", due: TODAY, createdAt: 3 }),
+    task({ id: "today1", due: TODAY, createdAt: 2 }),
+    task({ id: "tomorrow", due: "2026-11-15" }),
+    task({ id: "starNoDate", starred: true, createdAt: 1 }),
+    task({ id: "starToday", starred: true, due: TODAY }),
+    task({ id: "starLater", starred: true, due: "2026-12-24" }),
+    task({ id: "doneToday", due: TODAY, doneAt: NOW }),
+    task({ id: "doneStar", starred: true, doneAt: NOW })
+  ]
+  const sections = plain(T.focusSections(tasks, TODAY))
+  assert.deepEqual(
+    sections.map((s) => [s.key, s.title, s.tasks.map((t) => t.id)]),
+    [
+      ["starred", "Starred", ["starToday", "starLater", "starNoDate"]],
+      ["today", "Today", ["today1", "today2"]]
+    ]
+  )
+  assert.equal(T.countFocus(tasks, TODAY), 5)
+  assert.deepEqual(
+    tasks.filter((t) => T.inFocus(t, TODAY)).map((t) => t.id).sort(),
+    ["starLater", "starNoDate", "starToday", "today1", "today2"]
+  )
+  assert.equal(T.inFocus(null, TODAY), false)
+  assert.deepEqual(plain(T.focusSections([task({ id: "none" })], TODAY)), [])
+})
+
 test("done tasks are grouped by completion day, newest first", () => {
   const tasks = [
     task({ id: "old", doneAt: new Date(2026, 10, 2, 8, 0).getTime() }),

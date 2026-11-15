@@ -7,7 +7,8 @@ import qs.Ui as Ui
 import "tasks.js" as Tasks
 
 // The task list UI, shown in both the drop-down and the window. With addOnly
-// it is just the field for a new task: no tabs and no list (quick add).
+// it is just the field for a new task: no tabs and no list (quick add). With
+// focusOnly (the drop-down) it shows only the Focus tab.
 FocusScope {
   id: view
 
@@ -15,7 +16,9 @@ FocusScope {
   property var updater: null
   property bool compact: false
   property bool addOnly: false
-  property string tab: "open"
+  property bool focusOnly: false
+  // "focus" (starred or due today), "open" (To do), or "done".
+  property string tab: focusOnly ? "focus" : "open"
   property string newDue: ""
   property bool newStarred: false
   // The task Ctrl+D and Ctrl+F act on. Arrow keys or a click select it,
@@ -37,7 +40,8 @@ FocusScope {
   property string fontFamily: Style.font.family
   readonly property color dim: Util.alpha(foreground, 0.55)
 
-  readonly property var rows: !store ? [] : (tab === "open" ? store.openRows : store.doneRows)
+  readonly property var rows: !store ? [] : (tab === "focus" ? store.focusRows
+                                           : tab === "open" ? store.openRows : store.doneRows)
   // The selected task while it is in the list shown, else null. Quick add
   // shows no list, so nothing is selected there.
   readonly property var selectedTask: {
@@ -171,10 +175,10 @@ FocusScope {
       toggleShortcuts()
     } else if (ctrl && key === Qt.Key_1) {
       focusInput()
-      tab = "open"
-    } else if (ctrl && key === Qt.Key_2) {
+      tab = "focus"
+    } else if (ctrl && !focusOnly && (key === Qt.Key_2 || key === Qt.Key_3)) {
       focusInput()
-      tab = "done"
+      tab = key === Qt.Key_2 ? "open" : "done"
     } else if (mods === 0 && !shortcutsShown && !taskOpen && !newDescription.activeFocus
                && (key === Qt.Key_Down || key === Qt.Key_Up)) {
       moveSelection(key === Qt.Key_Down ? 1 : -1)
@@ -205,7 +209,10 @@ FocusScope {
     newDue = ""
     newStarred = false
     if (!addOnly) {
-      tab = "open"
+      // Show the new task: in Focus when it belongs there, else in To do.
+      // The drop-down shows only Focus, so it stays there.
+      if (!focusOnly && !(tab === "focus" && Tasks.inFocus(Tasks.findTask(store.tasks, id), store.today)))
+        tab = "open"
       Qt.callLater(revealTask, id)
     }
     // Last: quick add closes on it, which turns addOnly off.
@@ -267,23 +274,37 @@ FocusScope {
       spacing: Style.spacing.sm
 
       Ui.Button {
+        iconText: ""
+        text: "Focus  " + (view.store ? view.store.focusCount : 0)
+        bordered: true
+        selected: view.tab === "focus"
+        foreground: view.foreground
+        fontFamily: view.fontFamily
+        tooltipText: view.focusOnly
+          ? "Starred and due today. All tasks are in the window (Super+Shift+Alt+T)."
+          : "Starred and due today (Ctrl+1)"
+        onClicked: view.tab = "focus"
+      }
+      Ui.Button {
+        visible: !view.focusOnly
         iconText: ""
         text: "To do  " + (view.store ? view.store.openCount : 0)
         bordered: true
         selected: view.tab === "open"
         foreground: view.foreground
         fontFamily: view.fontFamily
-        tooltipText: "Ctrl+1"
+        tooltipText: "Ctrl+2"
         onClicked: view.tab = "open"
       }
       Ui.Button {
+        visible: !view.focusOnly
         iconText: ""
         text: "Done  " + (view.store ? view.store.doneCount : 0)
         bordered: true
         selected: view.tab === "done"
         foreground: view.foreground
         fontFamily: view.fontFamily
-        tooltipText: "Ctrl+2"
+        tooltipText: "Ctrl+3"
         onClicked: view.tab = "done"
       }
       Item { Layout.fillWidth: true }
@@ -458,7 +479,8 @@ FocusScope {
         wrapMode: Text.Wrap
         visible: view.rows.length === 0 && !!view.store && view.store.ready
         textFormat: Text.PlainText
-        text: view.tab === "open" ? "Nothing to do." : "Nothing done yet."
+        text: view.tab === "focus" ? "Nothing starred or due today."
+          : view.tab === "open" ? "Nothing to do." : "Nothing done yet."
         color: view.dim
         font.family: view.fontFamily
         font.pixelSize: Style.font.subtitle
@@ -698,6 +720,7 @@ FocusScope {
     z: 1
     visible: view.shortcutsShown
     compact: view.compact
+    focusOnly: view.focusOnly
     foreground: view.foreground
     background: view.background
     accent: view.accent
