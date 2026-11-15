@@ -371,6 +371,7 @@ FocusScope {
       TextBox {
         id: newDescription
         placeholderText: "Description. Ctrl+Enter adds the task."
+        maximumLength: Tasks.MAX_DESCRIPTION_LENGTH
         foreground: view.foreground
         accent: view.accent
         font.family: view.fontFamily

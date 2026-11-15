@@ -13,6 +13,16 @@ TextArea {
   property color foreground: Commons.Color.menu.text
   property color accent: Commons.Color.accent
   property bool quiet: false
+  // Like TextField's: what goes past it is dropped where it was typed or
+  // pasted, so nothing shown is lost on saving. -1: no limit.
+  property int maximumLength: -1
+
+  onTextChanged: {
+    if (maximumLength < 0 || length <= maximumLength) return
+    var start = cursorPosition - (length - maximumLength)
+    if (start < 0) remove(maximumLength, length)
+    else remove(start, cursorPosition)
+  }
 
   readonly property var borderSpec: Border.controlSpec(activeFocus ? "focus" : (hovered ? "hover-cursor" : "normal"),
                                                        foreground, accent)

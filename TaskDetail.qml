@@ -105,6 +105,7 @@ FocusScope {
       Layout.fillWidth: true
       quiet: true
       placeholderText: "Title"
+      maximumLength: Tasks.MAX_TEXT_LENGTH
       foreground: detail.done ? detail.dim : detail.foreground
       accent: detail.accent
       font.family: detail.fontFamily
@@ -138,6 +139,7 @@ FocusScope {
       TextBox {
         id: descriptionField
         placeholderText: "Add a description"
+        maximumLength: Tasks.MAX_DESCRIPTION_LENGTH
         foreground: detail.foreground
         accent: detail.accent
         font.family: detail.fontFamily
