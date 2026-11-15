@@ -3,9 +3,10 @@ import Quickshell
 import Quickshell.Io
 
 // Offers new releases of To Do the way a desktop app offers its updates: it
-// checks shortly after the shell starts and every four hours, downloads a
-// release when asked, and installs it with a restart of the shell. The
-// update script next to this file does the work.
+// checks shortly after the shell starts, every four hours, and when the
+// update button is clicked; it downloads a release when asked, and installs
+// it with a restart of the shell. The update script next to this file does
+// the work.
 Item {
   id: updater
   visible: false
@@ -23,13 +24,36 @@ Item {
   // Whether installed is set: `update version` runs after the shell starts.
   property bool installedKnown: false
 
-  function check() {
-    if (worker.running || status === "installing") return
+  // A check is running, on a timer or because the update button asked.
+  readonly property bool checking: worker.running && worker.command[1] === "check"
+  // Why the last check the update button asked for failed; "" again once
+  // any check works. A failed check on the timer does not set it.
+  property string checkError: ""
+  // A check the update button asked for found no newer release. True for a
+  // few seconds, so the button can say so.
+  property bool confirmedCurrent: false
+  // The update button asked for the running check.
+  property bool checkAsked: false
+
+  // asked: the update button wants the result shown, not only a newer release.
+  function check(asked) {
+    if (status === "installing") return
+    if (asked) {
+      checkAsked = true
+      checkError = ""
+      confirmedCurrent = false
+    }
+    // A running check answers the button too.
+    if (worker.running) return
     run(["check"])
   }
 
   // The update button's one action in each state.
   function act() {
+    if (status === "") {
+      check(true)
+      return
+    }
     if (worker.running) return
     if (status === "available" || status === "failed") {
       status = "downloading"
@@ -53,15 +77,26 @@ Item {
   function finished(action, exitCode, output, message) {
     if (action === "check") {
       var words = output.trim().split(" ")
+      var asked = checkAsked
+      checkAsked = false
       if (exitCode !== 0) {
         // Keep what an earlier check found; offline is no reason to hide it.
         console.warn("omarchy-todo: update check failed:", message)
-      } else if (words[0] === "available" || words[0] === "downloaded") {
+        // The script's own reason is the last line, after git's.
+        if (asked) checkError = message.split("\n").pop().replace(/^update: /, "") || "the update script failed"
+        return
+      }
+      checkError = ""
+      if (words[0] === "available" || words[0] === "downloaded") {
         status = words[0]
         version = words[1]
       } else {
         status = ""
         version = ""
+        if (asked) {
+          confirmedCurrent = true
+          confirmation.restart()
+        }
       }
     } else if (action === "download") {
       status = exitCode === 0 ? "downloaded" : "failed"
@@ -102,6 +137,12 @@ Item {
     running: true
     repeat: true
     onTriggered: updater.check()
+  }
+
+  Timer {
+    id: confirmation
+    interval: 4000
+    onTriggered: updater.confirmedCurrent = false
   }
 
   Timer {
