@@ -26,12 +26,18 @@ puts To Do in the app launcher.
 | | |
 | --- | --- |
 | `Super+Alt+T` | Drop-down on and off. `Esc` or a click outside closes it. |
-| `Super+Alt+N` | Quick add on and off: only the field for a new task, no list. It closes once the task is added. |
+| `Super+Alt+N` | Quick add on and off: only the field for a new task, no list. It closes once the task is added. `Ctrl+D` and `Ctrl+F` work there too. |
 | `Super+Shift+Alt+T` | App window (also "To Do" in the app launcher). `Super+W` closes it. |
-| `Enter` | Adds the typed task. Pick a date with **Due** first to give it one. |
+| `Enter` | Adds the typed task. Pick a date with **Due** (`Ctrl+D`) and a star (`Ctrl+F`) first to give it those. |
+| `Up` / `Down` | Selects a task in the list (so does a click on it). Typing or `Esc` unselects it. |
+| `Ctrl+D` | Due date of the selected task, or of the typed task when none is selected. In the date picker, the arrow keys move the highlighted day, `PgUp` / `PgDn` the month, `Enter` picks it, and `1` to `6` pick Today, Tomorrow, Next Mon, In a week, In a month, and No date. |
+| `Ctrl+F` | Stars or unstars the selected task, or the typed task when none is selected. |
 | `Ctrl+1` / `Ctrl+2` | To do / Done. |
+| `Ctrl+?` | All keyboard shortcuts (also the keyboard icon at the top). `Esc` closes them. |
 
 ![Quick add](docs/quick-add.png)
+
+![Keyboard shortcuts](docs/shortcuts.png)
 
 - Click the box to finish a task. Untick it under Done to bring it back.
 - Click the star to make a task a priority. Starred tasks stay at the top.
@@ -109,8 +115,9 @@ The tasks file stays.
 - `tasks.js`: task logic (storage format, sorting, dates). Tests:
   `node --test`.
 - `Main.qml`: plugin entry: the drop-down, quick add, and the window.
-- `TaskView.qml`, `DatePicker.qml`, `TaskStore.qml`: the list (with
-  `addOnly`, the quick add field), the date picker, loading and saving.
+- `TaskView.qml`, `DatePicker.qml`, `Shortcuts.qml`, `TaskStore.qml`: the
+  list (with `addOnly`, the quick add field), the date picker, the keyboard
+  shortcuts box, loading and saving.
 - `ErrorReports.qml`, `sentry.js`: error reports to Sentry (no SDK exists
   for QML; `sentry.js` builds the events, tested by `node --test`).
 - `update`, `Updater.qml`: finding, downloading, and installing releases, and

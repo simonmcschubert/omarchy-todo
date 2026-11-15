@@ -7,7 +7,8 @@ import qs.Ui as Ui
 import "tasks.js" as Tasks
 
 // Due date picker: quick choices and a month calendar. Emits picked("") for
-// "No date".
+// "No date". Works from the keyboard: arrows move the highlighted day, Enter
+// picks it, 1-6 pick the quick choices.
 //
 // It opens below `anchorItem`, or above it when there is more room there, and
 // always stays inside `boundsItem` (the whole window when unset). When even
@@ -17,6 +18,8 @@ Popup {
 
   property string today: Tasks.dateKey(new Date())
   property string selected: ""
+  // The highlighted day: Enter picks it. Arrow keys move it, hovering sets it.
+  property string cursor: ""
   // Follows Omarchy's language setting (Qt uses 7 for Sunday).
   property int firstDayOfWeek: Qt.locale(Commons.I18n.formatLocale).firstDayOfWeek % 7
   property int viewYear: 2026
@@ -37,6 +40,15 @@ Popup {
   readonly property int gap: Style.spacing.sm
 
   readonly property var cells: Tasks.monthGrid(viewYear, viewMonth, firstDayOfWeek)
+  // The quick choices, in this order on the keys 1 to 6.
+  readonly property var choices: [
+    { label: "Today", key: today },
+    { label: "Tomorrow", key: Tasks.addDays(today, 1) },
+    { label: "Next Mon", key: Tasks.nextWeekday(today, 1) },
+    { label: "In a week", key: Tasks.addDays(today, 7) },
+    { label: "In a month", key: Tasks.addMonths(today, 1) },
+    { label: "No date", key: "" }
+  ]
   readonly property int naturalCell: Style.space(30)
   readonly property int minimumCell: Style.space(18)
   // Everything but the day cells, so the cells alone can shrink to fit.
@@ -82,9 +94,7 @@ Popup {
 
   function openFor(current) {
     selected = current || ""
-    var base = Tasks.parseDateKey(selected || today) || new Date()
-    viewYear = base.getFullYear()
-    viewMonth = base.getMonth()
+    moveCursor(Tasks.isDateKey(selected) ? selected : today)
     place()
     open()
   }
@@ -94,10 +104,35 @@ Popup {
     close()
   }
 
-  function shiftMonth(delta) {
-    var d = new Date(viewYear, viewMonth + delta, 1)
+  // Highlights a day and shows its month.
+  function moveCursor(key) {
+    var d = Tasks.parseDateKey(key)
+    if (!d) return
+    cursor = key
     viewYear = d.getFullYear()
     viewMonth = d.getMonth()
+  }
+
+  // The same day in the month before or after the one shown.
+  function shiftMonth(delta) {
+    var c = Tasks.parseDateKey(cursor)
+    var inView = !!c && c.getFullYear() === viewYear && c.getMonth() === viewMonth
+    moveCursor(Tasks.addMonths(inView ? cursor : Tasks.dateKey(new Date(viewYear, viewMonth, 1)), delta))
+  }
+
+  function handleKey(event) {
+    if (event.modifiers & (Qt.ControlModifier | Qt.AltModifier | Qt.MetaModifier)) return false
+    var key = event.key
+    if (key === Qt.Key_Left) moveCursor(Tasks.addDays(cursor, -1))
+    else if (key === Qt.Key_Right) moveCursor(Tasks.addDays(cursor, 1))
+    else if (key === Qt.Key_Up) moveCursor(Tasks.addDays(cursor, -7))
+    else if (key === Qt.Key_Down) moveCursor(Tasks.addDays(cursor, 7))
+    else if (key === Qt.Key_PageUp) shiftMonth(-1)
+    else if (key === Qt.Key_PageDown) shiftMonth(1)
+    else if (key === Qt.Key_Return || key === Qt.Key_Enter || key === Qt.Key_Space) choose(cursor)
+    else if (key >= Qt.Key_1 && key < Qt.Key_1 + choices.length) choose(choices[key - Qt.Key_1].key)
+    else return false
+    return true
   }
 
   modal: false
@@ -141,6 +176,10 @@ Popup {
   contentItem: ColumnLayout {
     id: content
     spacing: Style.spacing.lg
+    focus: true
+    Keys.onPressed: function(event) {
+      if (picker.handleKey(event)) event.accepted = true
+    }
 
     GridLayout {
       id: quickChoices
@@ -150,14 +189,7 @@ Popup {
       Layout.fillWidth: true
 
       Repeater {
-        model: [
-          { label: "Today", key: picker.today },
-          { label: "Tomorrow", key: Tasks.addDays(picker.today, 1) },
-          { label: "Next Mon", key: Tasks.nextWeekday(picker.today, 1) },
-          { label: "In a week", key: Tasks.addDays(picker.today, 7) },
-          { label: "In a month", key: Tasks.addMonths(picker.today, 1) },
-          { label: "No date", key: "" }
-        ]
+        model: picker.choices
         delegate: Ui.Button {
           required property var modelData
           Layout.fillWidth: true
@@ -225,14 +257,15 @@ Popup {
           id: cell
           required property var modelData
           readonly property bool isSelected: modelData.key === picker.selected
+          readonly property bool isCursor: modelData.key === picker.cursor
           readonly property bool isToday: modelData.key === picker.today
           readonly property bool isPast: Tasks.daysBetween(picker.today, modelData.key) < 0
           width: picker.cellSize
           height: picker.cellSize
           radius: Math.max(2, Style.cornerRadius / 2)
-          color: isSelected ? picker.accent : (cellMouse.containsMouse ? picker.hoverFill : "transparent")
-          border.width: isToday && !isSelected ? 1 : 0
-          border.color: picker.accent
+          color: isSelected ? picker.accent : (isCursor ? picker.hoverFill : "transparent")
+          border.width: (isToday || isCursor) && !isSelected ? 1 : 0
+          border.color: isToday ? picker.accent : Util.alpha(picker.foreground, 0.55)
 
           Text {
             anchors.centerIn: parent
@@ -250,6 +283,7 @@ Popup {
             anchors.fill: parent
             hoverEnabled: true
             cursorShape: Qt.PointingHandCursor
+            onEntered: picker.cursor = cell.modelData.key
             onClicked: picker.choose(cell.modelData.key)
           }
         }

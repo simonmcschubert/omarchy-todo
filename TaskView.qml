@@ -17,9 +17,14 @@ FocusScope {
   property bool addOnly: false
   property string tab: "open"
   property string newDue: ""
+  property bool newStarred: false
+  // The task Ctrl+D and Ctrl+F act on. Arrow keys or a click select it,
+  // typing or Esc unselects it; the typed task is used while none is.
+  property string selectedId: ""
   property string pickerTarget: ""
   // Where the date picker may open. Unset, it is the whole window.
   property Item popupBounds: null
+  property bool shortcutsShown: false
 
   property color foreground: Commons.Color.menu.text
   property color background: Commons.Color.menu.background
@@ -31,6 +36,14 @@ FocusScope {
   readonly property color dim: Util.alpha(foreground, 0.55)
 
   readonly property var rows: !store ? [] : (tab === "open" ? store.openRows : store.doneRows)
+  // The selected task while it is in the list shown, else null. Quick add
+  // shows no list, so nothing is selected there.
+  readonly property var selectedTask: {
+    if (addOnly) return null
+    for (var i = 0; i < rows.length; i++)
+      if (rows[i].kind === "task" && rows[i].key === selectedId) return rows[i].task
+    return null
+  }
 
   // The update button for each status of the updater (Updater.qml); null
   // hides it.
@@ -55,19 +68,108 @@ FocusScope {
   signal closeRequested()
   signal added(string id)
 
-  implicitHeight: layout.implicitHeight
-  onTabChanged: flick.contentY = 0
+  // The drop-down grows to fit the shortcuts box when the list is shorter.
+  implicitHeight: Math.max(layout.implicitHeight, shortcutsShown ? shortcuts.implicitHeight : 0)
+  onTabChanged: {
+    flick.contentY = 0
+    selectedId = ""
+  }
 
   function focusInput() {
+    shortcutsShown = false
     input.forceActiveFocus()
+  }
+
+  function toggleShortcuts() {
+    if (shortcutsShown) {
+      focusInput()
+    } else {
+      shortcutsShown = true
+      shortcuts.forceActiveFocus()
+    }
+  }
+
+  function pickNewDue() {
+    shortcutsShown = false
+    openPicker("", newDue, newDueButton)
+  }
+
+  // Ctrl+D: the selected task's due date, or the typed task's. Done tasks
+  // keep theirs, as with the mouse.
+  function pickDue() {
+    var task = selectedTask
+    if (!task) pickNewDue()
+    else if (task.doneAt === null) openPicker(task.id, task.due || "", rowItemFor(task.id) || newDueButton)
+  }
+
+  // Ctrl+F: star or unstar the selected task, or the typed task.
+  function starTask() {
+    var task = selectedTask
+    if (!task) {
+      newStarred = !newStarred
+    } else if (task.doneAt === null) {
+      store.toggleStar(task.id)
+      Qt.callLater(revealTask, task.id)
+    }
+  }
+
+  // Up and Down select the task above or below. Up from the first task
+  // goes back to the typed task.
+  function moveSelection(delta) {
+    var ids = []
+    for (var i = 0; i < rows.length; i++)
+      if (rows[i].kind === "task") ids.push(rows[i].key)
+    var index = selectedTask ? ids.indexOf(selectedId) + delta : (delta > 0 ? 0 : -1)
+    if (index < 0) {
+      selectedId = ""
+    } else if (index < ids.length) {
+      selectedId = ids[index]
+      revealTask(selectedId)
+    }
+  }
+
+  // Shortcuts that work anywhere in the view, also while typing a task.
+  // Returns whether the key was one of them.
+  function handleKey(event) {
+    var mods = event.modifiers & (Qt.ControlModifier | Qt.ShiftModifier | Qt.AltModifier | Qt.MetaModifier)
+    var ctrl = (mods & Qt.ControlModifier) !== 0
+    var key = event.key
+    if (key === Qt.Key_Escape) {
+      if (shortcutsShown) focusInput()
+      else if (selectedTask) selectedId = ""
+      else closeRequested()
+    } else if (ctrl && key === Qt.Key_D) {
+      focusInput()
+      pickDue()
+    } else if (ctrl && key === Qt.Key_F) {
+      focusInput()
+      starTask()
+    } else if (addOnly) {
+      // Quick add is only the field: the rest needs the list.
+      return false
+    } else if (ctrl && (key === Qt.Key_Question || (key === Qt.Key_Slash && (mods & Qt.ShiftModifier)))) {
+      toggleShortcuts()
+    } else if (ctrl && key === Qt.Key_1) {
+      focusInput()
+      tab = "open"
+    } else if (ctrl && key === Qt.Key_2) {
+      focusInput()
+      tab = "done"
+    } else if (mods === 0 && !shortcutsShown && (key === Qt.Key_Down || key === Qt.Key_Up)) {
+      moveSelection(key === Qt.Key_Down ? 1 : -1)
+    } else {
+      return false
+    }
+    return true
   }
 
   function submit() {
     if (!store || input.text.trim() === "") return
-    var id = store.add(input.text, newDue)
+    var id = store.add(input.text, newDue, newStarred)
     if (id === "") return
     input.text = ""
     newDue = ""
+    newStarred = false
     if (!addOnly) {
       tab = "open"
       Qt.callLater(revealTask, id)
@@ -76,16 +178,25 @@ FocusScope {
     added(id)
   }
 
-  // Scroll the list so the task with this id is visible.
-  function revealTask(id) {
+  // The list row of the task with this id, or null.
+  function rowItemFor(id) {
     for (var i = 0; i < column.children.length; i++) {
       var child = column.children[i]
-      if (!child.item || !child.item.row || child.item.row.key !== id) continue
-      var maxY = Math.max(0, flick.contentHeight - flick.height)
-      if (child.y < flick.contentY || child.y + child.height > flick.contentY + flick.height)
-        flick.contentY = Math.max(0, Math.min(maxY, child.y + child.height - flick.height + Style.spacing.lg))
-      return
+      if (child.item && child.item.row && child.item.row.key === id) return child
     }
+    return null
+  }
+
+  // Scroll the list so the task with this id is visible, with the heading
+  // above it when the task is above the visible part.
+  function revealTask(id) {
+    var child = rowItemFor(id)
+    if (!child) return
+    var maxY = Math.max(0, flick.contentHeight - flick.height)
+    if (child.y < flick.contentY)
+      flick.contentY = Math.max(0, child.y - Style.space(30))
+    else if (child.y + child.height > flick.contentY + flick.height)
+      flick.contentY = Math.max(0, Math.min(maxY, child.y + child.height - flick.height + Style.spacing.lg))
   }
 
   function openPicker(target, current, anchor) {
@@ -102,19 +213,7 @@ FocusScope {
   }
 
   Keys.onPressed: function(event) {
-    var ctrl = (event.modifiers & Qt.ControlModifier) !== 0
-    if (event.key === Qt.Key_Escape) {
-      view.closeRequested()
-      event.accepted = true
-    } else if (view.addOnly) {
-      return
-    } else if (ctrl && event.key === Qt.Key_1) {
-      view.tab = "open"
-      event.accepted = true
-    } else if (ctrl && event.key === Qt.Key_2) {
-      view.tab = "done"
-      event.accepted = true
-    }
+    if (view.handleKey(event)) event.accepted = true
   }
 
   ColumnLayout {
@@ -167,6 +266,13 @@ FocusScope {
         onClicked: view.store.clearDone()
       }
       Ui.Button {
+        iconText: ""
+        foreground: view.foreground
+        fontFamily: view.fontFamily
+        tooltipText: "Keyboard shortcuts (Ctrl+?)"
+        onClicked: view.toggleShortcuts()
+      }
+      Ui.Button {
         visible: view.compact
         iconText: ""
         text: "Esc"
@@ -191,6 +297,20 @@ FocusScope {
         font.pixelSize: Style.font.body
         maximumLength: Tasks.MAX_TEXT_LENGTH
         onAccepted: view.submit()
+        onTextEdited: view.selectedId = ""
+        // Before the field's own keys, so a shortcut never edits the text.
+        Keys.onPressed: function(event) {
+          if (view.handleKey(event)) event.accepted = true
+        }
+      }
+      Ui.Button {
+        iconText: view.newStarred ? "" : ""
+        bordered: true
+        selected: view.newStarred
+        foreground: view.foreground
+        fontFamily: view.fontFamily
+        tooltipText: "Star (Ctrl+F)"
+        onClicked: view.newStarred = !view.newStarred
       }
       Ui.Button {
         id: newDueButton
@@ -200,8 +320,8 @@ FocusScope {
         selected: view.newDue !== ""
         foreground: view.foreground
         fontFamily: view.fontFamily
-        tooltipText: "Due date"
-        onClicked: view.openPicker("", view.newDue, newDueButton)
+        tooltipText: "Due date (Ctrl+D)"
+        onClicked: view.pickNewDue()
       }
       Ui.Button {
         iconText: ""
@@ -332,12 +452,22 @@ FocusScope {
       readonly property var task: row ? row.task : null
       readonly property bool done: !!task && task.doneAt !== null
       readonly property var due: task ? Tasks.dueInfo(task.due, view.store.today) : ({ label: "", state: "" })
+      readonly property bool isSelected: !!task && task.id === view.selectedId
 
       height: Math.max(Style.space(38), content.implicitHeight + Style.spacing.md * 2)
       radius: Math.max(2, Style.cornerRadius / 2)
-      color: hover.hovered ? view.hoverFill : "transparent"
+      color: isSelected ? Util.alpha(view.accent, 0.12) : (hover.hovered ? view.hoverFill : "transparent")
+      border.width: isSelected ? 1 : 0
+      border.color: view.accent
 
       HoverHandler { id: hover }
+
+      // A click on the row, not on one of its buttons, selects the task or
+      // unselects it again.
+      MouseArea {
+        anchors.fill: parent
+        onClicked: view.selectedId = rowItem.isSelected ? "" : rowItem.task.id
+      }
 
       RowLayout {
         id: content
@@ -479,6 +609,20 @@ FocusScope {
     }
   }
 
+  Shortcuts {
+    id: shortcuts
+    anchors.fill: parent
+    z: 1
+    visible: view.shortcutsShown
+    compact: view.compact
+    foreground: view.foreground
+    background: view.background
+    accent: view.accent
+    border: view.border
+    fontFamily: view.fontFamily
+    onCloseRequested: view.focusInput()
+  }
+
   DatePicker {
     id: picker
     parent: view
@@ -490,8 +634,14 @@ FocusScope {
     hoverFill: view.hoverFill
     fontFamily: view.fontFamily
     onPicked: function(due) {
-      if (view.pickerTarget === "") view.newDue = due
-      else view.store.setDue(view.pickerTarget, due)
+      var target = view.pickerTarget
+      if (target === "") {
+        view.newDue = due
+      } else {
+        view.store.setDue(target, due)
+        // The task may move to another section; keep the selection in view.
+        if (target === view.selectedId) Qt.callLater(view.revealTask, target)
+      }
     }
     onClosed: view.focusInput()
   }
