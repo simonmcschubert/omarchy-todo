@@ -25,13 +25,16 @@ FocusScope {
   readonly property var sections: [
     { title: "Tasks", rows: [
       { keys: ["Enter"], text: "Add the typed task" },
+      { keys: ["Tab"], text: "Add a description to it" },
+      { keys: ["Ctrl+Enter"], text: "Add the task from its description" },
       { keys: ["", ""], text: "Select a task in the list" },
+      { keys: ["Enter"], text: "Open the selected task (nothing typed)" },
       { keys: ["Ctrl+D"], text: "Due date of the selected or typed task" },
       { keys: ["Ctrl+F"], text: "Star or unstar the selected or typed task" },
       { keys: ["Ctrl+1"], text: "To do" },
       { keys: ["Ctrl+2"], text: "Done" },
       { keys: ["Ctrl+?"], text: "These shortcuts" },
-      { keys: ["Esc"], text: compact ? "Unselect the task, or close" : "Unselect the task" }
+      { keys: ["Esc"], text: compact ? "Back from a task, unselect it, or close" : "Back from a task, or unselect it" }
     ].concat(compact ? [] : [{ keys: ["Super+W"], text: "Close the window" }]) },
     { title: "Date picker", rows: [
       { keys: ["", ""], text: "Day before or after" },

@@ -3,13 +3,18 @@
 // Task logic without QML dependencies: storage format, operations, sorting,
 // and date helpers. The node tests in test/ load this file directly.
 //
-// Stored file (version 1):
-//   { "version": 1, "tasks": [ { "id", "text", "due", "starred", "createdAt", "doneAt" } ] }
-// due is a local calendar day "YYYY-MM-DD" or null; createdAt and doneAt are
-// epoch milliseconds, doneAt null while the task is open.
+// Stored file (version 2):
+//   { "version": 2, "tasks": [ { "id", "text", "description", "due", "starred", "createdAt", "doneAt" } ] }
+// text is one line. description is plain text over any number of lines, ""
+// when there is none. due is a local calendar day "YYYY-MM-DD" or null;
+// createdAt and doneAt are epoch milliseconds, doneAt null while the task is
+// open. Version 1 is the same without description; it is read and saved as
+// version 2, which older versions refuse instead of dropping descriptions.
 
-var FORMAT_VERSION = 1
+var FORMAT_VERSION = 2
+var READABLE_VERSIONS = [1, 2]
 var MAX_TEXT_LENGTH = 1000
+var MAX_DESCRIPTION_LENGTH = 10000
 var MAX_TASKS = 10000
 
 var WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
@@ -135,10 +140,27 @@ function weekdayHeaders(firstDayOfWeek) {
 
 // ---- storage ----------------------------------------------------------------
 
+// At most max characters of trimmed text, without half an emoji at the cut or
+// whitespace before it, so cutting a cut text changes nothing.
+function cut(text, max) {
+  if (text.length <= max) return text
+  var end = max
+  var last = text.charCodeAt(end - 1)
+  if (last >= 0xD800 && last <= 0xDBFF) end--
+  return text.substring(0, end).replace(/\s+$/, "")
+}
+
+// Cleaning clean text changes nothing, so a saved title or description
+// always reads back.
 function cleanText(value) {
   if (typeof value !== "string") return ""
-  var text = value.replace(/[\r\n\t]+/g, " ").trim()
-  return text.length > MAX_TEXT_LENGTH ? text.substring(0, MAX_TEXT_LENGTH) : text
+  return cut(value.replace(/[\r\n\t]+/g, " ").trim(), MAX_TEXT_LENGTH)
+}
+
+// Line endings become "\n" and the ends are trimmed.
+function cleanDescription(value) {
+  if (typeof value !== "string") return ""
+  return cut(value.replace(/\r\n?/g, "\n").trim(), MAX_DESCRIPTION_LENGTH)
 }
 
 function finiteOrNull(value) {
@@ -155,6 +177,7 @@ function normalizeTask(raw) {
   return {
     id: id,
     text: text,
+    description: cleanDescription(raw.description),
     due: isDateKey(raw.due) ? raw.due : null,
     starred: raw.starred === true,
     createdAt: finiteOrNull(raw.createdAt) || 0,
@@ -175,7 +198,7 @@ function parseStore(text) {
   if (!data || typeof data !== "object" || Array.isArray(data)) {
     return { ok: false, tasks: [], error: "unexpected content" }
   }
-  if (data.version !== FORMAT_VERSION) {
+  if (READABLE_VERSIONS.indexOf(data.version) < 0) {
     // Errors are reported, so they never quote the file beyond a number.
     var version = typeof data.version === "number" ? " " + data.version : ""
     return { ok: false, tasks: [], error: "unsupported format version" + version }
@@ -198,10 +221,11 @@ function parseStore(text) {
   return { ok: true, tasks: tasks, error: "" }
 }
 
-// Whether a stored task is exactly what normalizeTask made of it. due,
-// starred, and doneAt may be left out.
+// Whether a stored task is exactly what normalizeTask made of it.
+// description, due, starred, and doneAt may be left out.
 function readsBack(raw, task) {
   return raw.text === task.text
+    && (raw.description === undefined ? "" : raw.description) === task.description
     && (raw.due === undefined ? null : raw.due) === task.due
     && (raw.starred === undefined ? false : raw.starred) === task.starred
     && raw.createdAt === task.createdAt
@@ -218,7 +242,7 @@ function newId(now, random) {
   return "t" + Math.floor(now).toString(36) + Math.floor(random * 1679616).toString(36)
 }
 
-function addTask(tasks, text, due, starred, now, random) {
+function addTask(tasks, text, description, due, starred, now, random) {
   var clean = cleanText(text)
   if (!clean || tasks.length >= MAX_TASKS) return tasks
   var id = newId(now, random)
@@ -226,11 +250,17 @@ function addTask(tasks, text, due, starred, now, random) {
   return [{
     id: id,
     text: clean,
+    description: cleanDescription(description),
     due: isDateKey(due) ? due : null,
     starred: starred === true,
     createdAt: Math.floor(now),
     doneAt: null
   }].concat(tasks)
+}
+
+function findTask(tasks, id) {
+  for (var i = 0; i < tasks.length; i++) if (tasks[i].id === id) return tasks[i]
+  return null
 }
 
 function update(tasks, id, change) {
@@ -248,8 +278,21 @@ function setDone(tasks, id, done, now) {
 }
 
 function toggleStar(tasks, id) {
-  var task = tasks.filter(function(t) { return t.id === id })[0]
+  var task = findTask(tasks, id)
   return task ? update(tasks, id, { starred: !task.starred }) : tasks
+}
+
+// A new title and description. An empty title keeps the old one. The same
+// list when nothing changes.
+function editTask(tasks, id, text, description) {
+  var task = findTask(tasks, id)
+  if (!task) return tasks
+  var change = {}
+  var title = cleanText(text)
+  if (title && title !== task.text) change.text = title
+  var notes = cleanDescription(description)
+  if (notes !== task.description) change.description = notes
+  return Object.keys(change).length > 0 ? update(tasks, id, change) : tasks
 }
 
 function setDue(tasks, id, due) {

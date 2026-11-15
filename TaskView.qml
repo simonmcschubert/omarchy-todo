@@ -21,6 +21,8 @@ FocusScope {
   // The task Ctrl+D and Ctrl+F act on. Arrow keys or a click select it,
   // typing or Esc unselects it; the typed task is used while none is.
   property string selectedId: ""
+  // The new task's description field is open (Tab in the input).
+  property bool describing: false
   property string pickerTarget: ""
   // Where the date picker may open. Unset, it is the whole window.
   property Item popupBounds: null
@@ -44,6 +46,8 @@ FocusScope {
       if (rows[i].kind === "task" && rows[i].key === selectedId) return rows[i].task
     return null
   }
+  // A task opened from the list replaces the list until Back or Esc.
+  readonly property bool taskOpen: detail.task !== null
 
   // The update button for each status of the updater (Updater.qml); null
   // hides it.
@@ -68,16 +72,26 @@ FocusScope {
   signal closeRequested()
   signal added(string id)
 
-  // The drop-down grows to fit the shortcuts box when the list is shorter.
-  implicitHeight: Math.max(layout.implicitHeight, shortcutsShown ? shortcuts.implicitHeight : 0)
+  // The drop-down grows to fit the shortcuts box when the list or task is shorter.
+  implicitHeight: Math.max(taskOpen ? detail.implicitHeight : layout.implicitHeight,
+                           shortcutsShown ? shortcuts.implicitHeight : 0)
   onTabChanged: {
     flick.contentY = 0
     selectedId = ""
   }
+  // Also when the open task is deleted elsewhere.
+  onTaskOpenChanged: if (!taskOpen) input.forceActiveFocus()
 
+  // Back to the list, ready to type a new task.
   function focusInput() {
     shortcutsShown = false
+    detail.hide()
     input.forceActiveFocus()
+  }
+
+  function openTask(id) {
+    selectedId = id
+    detail.show(id)
   }
 
   function toggleShortcuts() {
@@ -135,7 +149,7 @@ FocusScope {
     var ctrl = (mods & Qt.ControlModifier) !== 0
     var key = event.key
     if (key === Qt.Key_Escape) {
-      if (shortcutsShown) focusInput()
+      if (shortcutsShown || taskOpen) focusInput()
       else if (selectedTask) selectedId = ""
       else closeRequested()
     } else if (ctrl && key === Qt.Key_D) {
@@ -155,8 +169,12 @@ FocusScope {
     } else if (ctrl && key === Qt.Key_2) {
       focusInput()
       tab = "done"
-    } else if (mods === 0 && !shortcutsShown && (key === Qt.Key_Down || key === Qt.Key_Up)) {
+    } else if (mods === 0 && !shortcutsShown && !taskOpen && (key === Qt.Key_Down || key === Qt.Key_Up)) {
       moveSelection(key === Qt.Key_Down ? 1 : -1)
+    } else if (mods === 0 && (key === Qt.Key_Return || key === Qt.Key_Enter) && selectedTask
+               && !shortcutsShown && !taskOpen && input.text.trim() === "") {
+      // Enter with nothing typed opens the selected task.
+      openTask(selectedTask.id)
     } else {
       return false
     }
@@ -165,9 +183,12 @@ FocusScope {
 
   function submit() {
     if (!store || input.text.trim() === "") return
-    var id = store.add(input.text, newDue, newStarred)
+    var id = store.add(input.text, newDescription.text, newDue, newStarred)
     if (id === "") return
+    input.forceActiveFocus()
     input.text = ""
+    newDescription.text = ""
+    describing = false
     newDue = ""
     newStarred = false
     if (!addOnly) {
@@ -176,6 +197,11 @@ FocusScope {
     }
     // Last: quick add closes on it, which turns addOnly off.
     added(id)
+  }
+
+  function describeNew() {
+    describing = true
+    newDescription.forceActiveFocus()
   }
 
   // The list row of the task with this id, or null.
@@ -219,6 +245,7 @@ FocusScope {
   ColumnLayout {
     id: layout
     anchors.fill: parent
+    visible: !view.taskOpen
     spacing: Style.spacing.lg
 
     RowLayout {
@@ -290,7 +317,7 @@ FocusScope {
         id: input
         Layout.fillWidth: true
         focus: true
-        placeholderText: "Add a task, press Enter"
+        placeholderText: "Add a task, press Enter. Tab adds a description."
         foreground: view.foreground
         accent: view.accent
         font.family: view.fontFamily
@@ -302,6 +329,7 @@ FocusScope {
         Keys.onPressed: function(event) {
           if (view.handleKey(event)) event.accepted = true
         }
+        Keys.onTabPressed: view.describeNew()
       }
       Ui.Button {
         iconText: view.newStarred ? "" : ""
@@ -330,6 +358,32 @@ FocusScope {
         foreground: view.foreground
         fontFamily: view.fontFamily
         onClicked: view.submit()
+      }
+    }
+
+    // Enter starts a new line here; Ctrl+Enter adds the task. Closes again
+    // when left empty.
+    ScrollView {
+      Layout.fillWidth: true
+      Layout.preferredHeight: Math.min(Math.max(newDescription.implicitHeight, Style.space(64)), Style.space(160))
+      visible: view.describing
+
+      TextBox {
+        id: newDescription
+        placeholderText: "Description. Ctrl+Enter adds the task."
+        foreground: view.foreground
+        accent: view.accent
+        font.family: view.fontFamily
+        Keys.onReturnPressed: function(event) {
+          if (event.modifiers & Qt.ControlModifier) view.submit()
+          else event.accepted = false
+        }
+        Keys.onEnterPressed: function(event) {
+          if (event.modifiers & Qt.ControlModifier) view.submit()
+          else event.accepted = false
+        }
+        Keys.onBacktabPressed: input.forceActiveFocus()
+        onActiveFocusChanged: if (!activeFocus && text === "") view.describing = false
       }
     }
 
@@ -462,11 +516,12 @@ FocusScope {
 
       HoverHandler { id: hover }
 
-      // A click on the row, not on one of its buttons, selects the task or
-      // unselects it again.
+      // A click on the row, not on one of its buttons, opens the task. It
+      // also selects it, so Ctrl+D and Ctrl+F act on it after Back.
       MouseArea {
         anchors.fill: parent
-        onClicked: view.selectedId = rowItem.isSelected ? "" : rowItem.task.id
+        cursorShape: Qt.PointingHandCursor
+        onClicked: view.openTask(rowItem.task.id)
       }
 
       RowLayout {
@@ -607,6 +662,18 @@ FocusScope {
         }
       }
     }
+  }
+
+  TaskDetail {
+    id: detail
+    anchors.fill: parent
+    visible: view.taskOpen
+    store: view.store
+    foreground: view.foreground
+    accent: view.accent
+    urgent: view.urgent
+    fontFamily: view.fontFamily
+    onBackRequested: view.focusInput()
   }
 
   Shortcuts {

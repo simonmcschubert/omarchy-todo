@@ -66,15 +66,16 @@ Item {
   }
 
   // Returns the new task's id, or "" when nothing was added.
-  function add(text, due, starred) {
+  function add(text, description, due, starred) {
     return run("add", function() {
-      var next = Tasks.addTask(tasks, text, due, starred, Date.now(), Math.random())
+      var next = Tasks.addTask(tasks, text, description, due, starred, Date.now(), Math.random())
       return next !== tasks && commit(next) ? next[0].id : ""
     })
   }
   function setDone(id, done) { return run("setDone", function() { return commit(Tasks.setDone(tasks, id, done, Date.now())) }) }
   function toggleStar(id) { return run("toggleStar", function() { return commit(Tasks.toggleStar(tasks, id)) }) }
   function setDue(id, due) { return run("setDue", function() { return commit(Tasks.setDue(tasks, id, due)) }) }
+  function edit(id, text, description) { return run("edit", function() { return commit(Tasks.editTask(tasks, id, text, description)) }) }
   function remove(id) { return run("remove", function() { return commit(Tasks.removeTask(tasks, id)) }) }
   function clearDone() { return run("clearDone", function() { return commit(Tasks.clearDone(tasks)) }) }
 
