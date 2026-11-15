@@ -27,7 +27,7 @@ puts To Do in the app launcher.
 | --- | --- |
 | `Super+Alt+T` | Drop-down on and off. `Esc` or a click outside closes it. |
 | `Super+Alt+N` | Quick add on and off: only the field for a new task, no list. It closes once the task is added. `Ctrl+D` and `Ctrl+F` work there too. |
-| `Super+Shift+Alt+T` | App window (also "To Do" in the app launcher). `Super+W` closes it. |
+| `Super+Shift+Alt+T` | App window (also "To Do" in the app launcher), or back to it when it is open on another workspace. `Super+W` closes it. |
 | `Enter` | Adds the typed task. Pick a date with **Due** (`Ctrl+D`) and a star (`Ctrl+F`) first to give it those. |
 | `Up` / `Down` | Selects a task in the list (so does a click on it). Typing or `Esc` unselects it. |
 | `Ctrl+D` | Due date of the selected task, or of the typed task when none is selected. In the date picker, the arrow keys move the highlighted day, `PgUp` / `PgDn` the month, `Enter` picks it, and `1` to `6` pick Today, Tomorrow, Next Mon, In a week, In a month, and No date. |
