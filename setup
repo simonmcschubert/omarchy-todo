@@ -41,6 +41,7 @@ remove_bindings
 cat >>"$BINDINGS" <<EOF
 $BEGIN
 o.bind("SUPER + ALT + T", "To Do", { panel = "$ID" })
+o.bind("SUPER + ALT + N", "To Do quick add", "omarchy-shell shell toggle $ID add")
 o.bind("SUPER + SHIFT + ALT + T", "To Do window", "omarchy-shell shell summon $ID window")
 $END
 EOF
@@ -57,5 +58,5 @@ Terminal=false
 Categories=Utility;
 EOF
 
-echo "Shortcuts: Super+Alt+T (drop-down), Super+Shift+Alt+T (window)."
+echo "Shortcuts: Super+Alt+T (drop-down), Super+Alt+N (quick add), Super+Shift+Alt+T (window)."
 echo "App launcher: To Do."

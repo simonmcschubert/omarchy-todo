@@ -6,12 +6,14 @@ import qs.Commons as Commons
 import qs.Ui as Ui
 import "tasks.js" as Tasks
 
-// The task list UI, shown in both the drop-down and the window.
+// The task list UI, shown in both the drop-down and the window. With addOnly
+// it is just the field for a new task: no tabs and no list (quick add).
 FocusScope {
   id: view
 
   property var store: null
   property bool compact: false
+  property bool addOnly: false
   property string tab: "open"
   property string newDue: ""
   property string pickerTarget: ""
@@ -28,6 +30,7 @@ FocusScope {
   readonly property var rows: !store ? [] : (tab === "open" ? store.openRows : store.doneRows)
 
   signal closeRequested()
+  signal added(string id)
 
   implicitHeight: layout.implicitHeight
   onTabChanged: flick.contentY = 0
@@ -42,8 +45,12 @@ FocusScope {
     if (id === "") return
     input.text = ""
     newDue = ""
-    tab = "open"
-    Qt.callLater(revealTask, id)
+    if (!addOnly) {
+      tab = "open"
+      Qt.callLater(revealTask, id)
+    }
+    // Last: quick add closes on it, which turns addOnly off.
+    added(id)
   }
 
   // Scroll the list so the task with this id is visible.
@@ -66,7 +73,8 @@ FocusScope {
     var h = picker.implicitHeight
     picker.x = Math.max(0, Math.min(p.x + anchor.width - w, view.width - w))
     var below = p.y + anchor.height + Style.spacing.sm
-    picker.y = below + h <= view.height ? below : Math.max(0, p.y - h - Style.spacing.sm)
+    // Quick add is one row high: the picker opens below it, over the screen.
+    picker.y = addOnly || below + h <= view.height ? below : Math.max(0, p.y - h - Style.spacing.sm)
     picker.openFor(current)
   }
 
@@ -81,6 +89,8 @@ FocusScope {
     if (event.key === Qt.Key_Escape) {
       view.closeRequested()
       event.accepted = true
+    } else if (view.addOnly) {
+      return
     } else if (ctrl && event.key === Qt.Key_1) {
       view.tab = "open"
       event.accepted = true
@@ -97,6 +107,7 @@ FocusScope {
 
     RowLayout {
       Layout.fillWidth: true
+      visible: !view.addOnly
       spacing: Style.spacing.sm
 
       Ui.Button {
@@ -188,6 +199,7 @@ FocusScope {
 
     Flickable {
       id: flick
+      visible: !view.addOnly
       Layout.fillWidth: true
       Layout.fillHeight: true
       Layout.preferredHeight: column.implicitHeight
