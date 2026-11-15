@@ -70,9 +70,13 @@ omarchy-shell shell summon simonmcschubert.todo window   # window
 ## Update
 
 To Do looks for a new release 15 seconds after the shell starts and every four
-hours. When there is one, **Update** appears next to Esc. Click it to download
-the release, then click **Restart to update** to install it and restart the
-Omarchy shell. A notification confirms the update or says why it failed.
+hours. The window always shows the update button, a circle of arrows next to
+the shortcuts button: click it to check now, and hover it to see the installed
+version. When there is a release, the button turns into a down arrow with
+**Update**, in the window and in the drop-down (next to Esc). Click it to
+download the release, then click **Restart to update** to install it and
+restart the Omarchy shell. A notification confirms the update or says why it
+failed.
 Like `omarchy plugin update --yes`, this does not show the changes first; the
 release notes on GitHub list them. Updates never touch the tasks.
 
@@ -157,7 +161,8 @@ docker exec todo-dev act reload    # after a code change
 Sentry with environment `development`; add `-e DO_NOT_TRACK=1` to send none.
 `dev/act` lists all commands. Hyprland ignores shortcuts from virtual
 keyboards, so test a shortcut by running its command. The container installs
-a copy without `.git`, so To Do offers no updates there.
+a copy without `.git`, so To Do offers no updates there, and the window's
+update button says it can't check.
 
 ## Releases
 
