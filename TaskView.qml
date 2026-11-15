@@ -397,6 +397,8 @@ FocusScope {
           else event.accepted = false
         }
         Keys.onBacktabPressed: input.forceActiveFocus()
+        // Typing unselects the task, as in the title field.
+        onTextChanged: if (activeFocus) view.selectedId = ""
         onActiveFocusChanged: if (!activeFocus && text === "") view.describing = false
       }
     }
