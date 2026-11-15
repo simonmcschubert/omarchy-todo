@@ -79,6 +79,8 @@ Item {
     // The installed release, from the checkout's tags; manifest.json's
     // version for a copy without them.
     release: "omarchy-todo@" + (updater.installed || (root.manifest && root.manifest.version ? root.manifest.version : "unknown"))
+    // The shell sets manifest only after it has created the plugin.
+    releaseKnown: updater.installedKnown && (updater.installed !== "" || root.manifest !== null)
     pluginUrl: Qt.resolvedUrl(".")
   }
 

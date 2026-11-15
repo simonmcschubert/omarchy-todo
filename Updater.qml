@@ -20,6 +20,8 @@ Item {
   // The installed release (`update version`): the tags hold the version, not
   // manifest.json. "" before the first release or without a git checkout.
   property string installed: ""
+  // Whether installed is set: `update version` runs after the shell starts.
+  property bool installedKnown: false
 
   function check() {
     if (worker.running || status === "installing") return
@@ -81,7 +83,10 @@ Item {
     running: true
     stdout: StdioCollector {
       waitForEnd: true
-      onStreamFinished: updater.installed = text.trim()
+      onStreamFinished: {
+        updater.installed = text.trim()
+        updater.installedKnown = true
+      }
     }
   }
 
