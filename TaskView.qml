@@ -45,10 +45,12 @@ FocusScope {
     if (id === "") return
     input.text = ""
     newDue = ""
+    if (!addOnly) {
+      tab = "open"
+      Qt.callLater(revealTask, id)
+    }
+    // Last: quick add closes on it, which turns addOnly off.
     added(id)
-    if (addOnly) return
-    tab = "open"
-    Qt.callLater(revealTask, id)
   }
 
   // Scroll the list so the task with this id is visible.
