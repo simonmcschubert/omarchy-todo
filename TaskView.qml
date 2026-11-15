@@ -17,6 +17,8 @@ FocusScope {
   property string tab: "open"
   property string newDue: ""
   property string pickerTarget: ""
+  // Where the date picker may open. Unset, it is the whole window.
+  property Item popupBounds: null
 
   property color foreground: Commons.Color.menu.text
   property color background: Commons.Color.menu.background
@@ -68,13 +70,7 @@ FocusScope {
   function openPicker(target, current, anchor) {
     pickerTarget = target
     picker.today = store.today
-    var p = anchor.mapToItem(view, 0, 0)
-    var w = picker.implicitWidth
-    var h = picker.implicitHeight
-    picker.x = Math.max(0, Math.min(p.x + anchor.width - w, view.width - w))
-    var below = p.y + anchor.height + Style.spacing.sm
-    // Quick add is one row high: the picker opens below it, over the screen.
-    picker.y = addOnly || below + h <= view.height ? below : Math.max(0, p.y - h - Style.spacing.sm)
+    picker.anchorItem = anchor
     picker.openFor(current)
   }
 
@@ -208,11 +204,17 @@ FocusScope {
       contentWidth: width
       contentHeight: column.implicitHeight
       boundsBehavior: Flickable.StopAtBounds
-      ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
+      ScrollBar.vertical: ScrollBar { id: scrollBar; policy: ScrollBar.AsNeeded }
+
+      readonly property bool scrolls: contentHeight > height
+      readonly property real scrollStrip: scrolls ? scrollBar.width + Style.spacing.xs : 0
 
       Column {
         id: column
-        width: flick.width
+        // When the list scrolls, the scroll bar gets its own strip instead of
+        // covering the stars and bins. Mirrored, it is on the left.
+        x: LayoutMirroring.enabled ? flick.scrollStrip : 0
+        width: flick.width - flick.scrollStrip
         spacing: Style.spacing.xxs
 
         Repeater {
@@ -226,8 +228,13 @@ FocusScope {
         }
       }
 
+      // In the list's visible area: the content is empty, so has no height.
       Text {
+        parent: flick
         anchors.centerIn: parent
+        width: parent.width
+        horizontalAlignment: Text.AlignHCenter
+        wrapMode: Text.Wrap
         visible: view.rows.length === 0 && !!view.store && view.store.ready
         textFormat: Text.PlainText
         text: view.tab === "open" ? "Nothing to do." : "Nothing done yet."
@@ -444,6 +451,7 @@ FocusScope {
   DatePicker {
     id: picker
     parent: view
+    boundsItem: view.popupBounds
     foreground: view.foreground
     surface: view.background
     accent: view.accent
