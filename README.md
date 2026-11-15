@@ -29,7 +29,8 @@ puts To Do in the app launcher.
 | `Super+Alt+N` | Quick add on and off: only the field for a new task, no list. It closes once the task is added. `Ctrl+D` and `Ctrl+F` work there too. |
 | `Super+Shift+Alt+T` | App window (also "To Do" in the app launcher), or back to it when it is open on another workspace. `Super+W` closes it. |
 | `Enter` | Adds the typed task. Pick a date with **Due** (`Ctrl+D`) and a star (`Ctrl+F`) first to give it those. |
-| `Up` / `Down` | Selects a task in the list (so does a click on it). Typing or `Esc` unselects it. |
+| `Tab` | Adds a description to the new task. `Enter` starts a new line there, `Ctrl+Enter` adds the task. |
+| `Up` / `Down` | Selects a task in the list. `Enter` with nothing typed opens it. Typing or `Esc` unselects it. |
 | `Ctrl+D` | Due date of the selected task, or of the typed task when none is selected. In the date picker, the arrow keys move the highlighted day, `PgUp` / `PgDn` the month, `Enter` picks it, and `1` to `6` pick Today, Tomorrow, Next Mon, In a week, In a month, and No date. |
 | `Ctrl+F` | Stars or unstars the selected task, or the typed task when none is selected. |
 | `Ctrl+1` / `Ctrl+2` | To do / Done. |
@@ -39,6 +40,10 @@ puts To Do in the app launcher.
 
 ![Keyboard shortcuts](docs/shortcuts.png)
 
+- Click a task to open it, then click its title to change it or write in its
+  description: plain text, as many lines as you like. Changes save as you
+  type. `Esc` or **Back** returns to the list, which shows titles only. The
+  task stays selected, so `Ctrl+D` and `Ctrl+F` act on it.
 - Click the box to finish a task. Untick it under Done to bring it back.
 - Click the star to make a task a priority. Starred tasks stay at the top.
 - Click a task's date (or the calendar icon on hover) to change or remove it.
@@ -87,6 +92,9 @@ for quick add) and the current names in the app launcher.
 open. Copy it to back it up. If the file cannot be read, To Do shows an error
 and saves nothing until the file is fixed or moved away.
 
+To Do saves the file in format version 2 since descriptions were added.
+Older versions refuse a version 2 file instead of dropping its descriptions.
+
 ## Error reports
 
 When something goes wrong (the tasks file cannot be read, created, or saved,
@@ -115,9 +123,10 @@ The tasks file stays.
 - `tasks.js`: task logic (storage format, sorting, dates). Tests:
   `node --test`.
 - `Main.qml`: plugin entry: the drop-down, quick add, and the window.
-- `TaskView.qml`, `DatePicker.qml`, `Shortcuts.qml`, `TaskStore.qml`: the
-  list (with `addOnly`, the quick add field), the date picker, the keyboard
-  shortcuts box, loading and saving.
+- `TaskView.qml`, `TaskDetail.qml`, `DatePicker.qml`, `Shortcuts.qml`,
+  `TaskStore.qml`: the list (with `addOnly`, the quick add field), an opened
+  task, the date picker, the keyboard shortcuts box, loading and saving.
+  `TextBox.qml`: the text field for titles and descriptions.
 - `ErrorReports.qml`, `sentry.js`: error reports to Sentry (no SDK exists
   for QML; `sentry.js` builds the events, tested by `node --test`).
 - `update`, `Updater.qml`: finding, downloading, and installing releases, and

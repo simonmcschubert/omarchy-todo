@@ -8,11 +8,13 @@ jq -n \
   --arg soon "$(d '+4 days')" --arg later "$(d '+20 days')" \
   --argjson c1 "$(ms '-5 days')" --argjson c2 "$(ms '-2 days')" --argjson c3 "$(ms '-1 day')" \
   --argjson done1 "$(ms '-1 hour')" --argjson done2 "$(ms '-1 day')" '
-{ version: 1, tasks: [
+{ version: 2, tasks: [
   { id: "demo1", text: "Renew passport", due: $soon, starred: true, createdAt: $c1, doneAt: null },
   { id: "demo2", text: "Send invoice to client", due: $overdue, starred: false, createdAt: $c1, doneAt: null },
   { id: "demo3", text: "Call the dentist", due: $today, starred: false, createdAt: $c2, doneAt: null },
-  { id: "demo4", text: "Back up fw13-1 before the BIOS update", due: $tomorrow, starred: false, createdAt: $c2, doneAt: null },
+  { id: "demo4", text: "Back up fw13-1 before the BIOS update",
+    description: "Home and ~/.config to the USB disk.\nTry a restore before flashing.",
+    due: $tomorrow, starred: false, createdAt: $c2, doneAt: null },
   { id: "demo5", text: "Review the release notes", due: $later, starred: false, createdAt: $c3, doneAt: null },
   { id: "demo6", text: "Read the Hyprland changelog", due: null, starred: false, createdAt: $c3, doneAt: null },
   { id: "demo7", text: "Water the plants", due: $today, starred: false, createdAt: $c2, doneAt: $done1 },

@@ -19,7 +19,7 @@ const NOW = new Date(2026, 10, 14, 9, 30).getTime() // Sat 14 Nov 2026, 09:30
 const TODAY = "2026-11-14"
 
 function task(over) {
-  return { id: "a", text: "Task", due: null, starred: false, createdAt: 1, doneAt: null, ...over }
+  return { id: "a", text: "Task", description: "", due: null, starred: false, createdAt: 1, doneAt: null, ...over }
 }
 
 test("date keys are local calendar days and reject impossible dates", () => {
@@ -74,25 +74,31 @@ test("parseStore accepts an empty file and refuses what it cannot read", () => {
   assert.deepEqual(plain(T.parseStore("")), { ok: true, tasks: [], error: "" })
   assert.equal(T.parseStore("{oops").ok, false)
   assert.equal(T.parseStore("[]").ok, false)
-  assert.equal(T.parseStore('{"version":2,"tasks":[]}').ok, false)
+  assert.equal(T.parseStore('{"version":3,"tasks":[]}').ok, false)
   assert.equal(T.parseStore('{"version":1,"tasks":{}}').ok, false)
-  assert.equal(T.parseStore('{"version":2,"tasks":[]}').error, "unsupported format version 2")
+  assert.equal(T.parseStore('{"version":3,"tasks":[]}').error, "unsupported format version 3")
   // Errors are sent in error reports, so file content stays out of them.
   assert.equal(T.parseStore('{"version":{"text":"Private task"},"tasks":[]}').error, "unsupported format version")
 })
 
 test("parseStore refuses a file with any task it cannot read back exactly", () => {
-  const good = { id: "a", text: "Call the bank", due: "2026-11-20", starred: true, createdAt: 5, doneAt: null }
-  const file = (...tasks) => JSON.stringify({ version: 1, tasks })
+  const good = {
+    id: "a", text: "Call the bank", description: "Ask about the fee.\n\nAccount ending 4711",
+    due: "2026-11-20", starred: true, createdAt: 5, doneAt: null
+  }
+  const file = (...tasks) => JSON.stringify({ version: 2, tasks })
   assert.deepEqual(plain(T.parseStore(file(good))).tasks, [good])
   assert.deepEqual(plain(T.parseStore(file({ id: "b", text: "Short", createdAt: 7 }))).tasks, [
-    { id: "b", text: "Short", due: null, starred: false, createdAt: 7, doneAt: null }
+    { id: "b", text: "Short", description: "", due: null, starred: false, createdAt: 7, doneAt: null }
   ])
   const bad = [
     "not an object",
     { ...good, id: "c d" },
     { ...good, text: "   " },
     { ...good, text: "  Call the bank  " },
+    { ...good, description: null },
+    { ...good, description: "Ask about the fee.\n" },
+    { ...good, description: "Line one\r\nLine two" },
     { ...good, due: "2026-02-30" },
     { ...good, starred: "yes" },
     { ...good, createdAt: -1 },
@@ -107,29 +113,72 @@ test("parseStore refuses a file with any task it cannot read back exactly", () =
 })
 
 test("serialize round-trips through parseStore", () => {
-  const tasks = [task({ id: "x", due: "2026-11-20", starred: true, doneAt: NOW })]
+  const tasks = [task({ id: "x", description: "Two\nlines", due: "2026-11-20", starred: true, doneAt: NOW })]
   const parsed = plain(T.parseStore(T.serialize(tasks)))
   assert.deepEqual(parsed.tasks, tasks)
 })
 
+test("a version 1 file reads with empty descriptions and saves as version 2", () => {
+  const v1 = JSON.stringify({ version: 1, tasks: [{ id: "a", text: "Old task", due: null, starred: false, createdAt: 3, doneAt: null }] })
+  const parsed = plain(T.parseStore(v1))
+  assert.equal(parsed.ok, true)
+  assert.equal(parsed.tasks[0].description, "")
+  assert.equal(JSON.parse(T.serialize(parsed.tasks)).version, 2)
+})
+
+test("descriptions keep their lines and lose only line-ending and edge whitespace", () => {
+  assert.equal(T.cleanDescription("  \nFirst line\r\n\r\n  indented\rlast \n\n"), "First line\n\n  indented\nlast")
+  assert.equal(T.cleanDescription("<b>not markup</b>"), "<b>not markup</b>")
+  assert.equal(T.cleanDescription(42), "")
+})
+
+test("text cut to its limit reads back exactly", () => {
+  const title = T.cleanText("a".repeat(T.MAX_TEXT_LENGTH - 1) + " b")
+  assert.equal(title, "a".repeat(T.MAX_TEXT_LENGTH - 1))
+  assert.equal(T.cleanText(title), title)
+  const description = T.cleanDescription("a".repeat(T.MAX_DESCRIPTION_LENGTH - 1) + "\nb")
+  assert.equal(description, "a".repeat(T.MAX_DESCRIPTION_LENGTH - 1))
+  assert.equal(T.cleanDescription(description), description)
+  // An emoji across the limit is left out whole.
+  const emoji = T.cleanText("a".repeat(T.MAX_TEXT_LENGTH - 1) + "\u{1F600}")
+  assert.equal(emoji, "a".repeat(T.MAX_TEXT_LENGTH - 1))
+  const file = T.serialize([task({ text: title, description })])
+  assert.equal(T.parseStore(file).ok, true)
+})
+
+test("editTask changes title and description and returns the same list when nothing changes", () => {
+  const tasks = [task({ id: "a", text: "Call bank" }), task({ id: "b" })]
+  const next = T.editTask(tasks, "a", " Call the bank\n", " Bring the receipt \n")
+  assert.deepEqual(plain(next).map((t) => [t.text, t.description]), [["Call the bank", "Bring the receipt"], ["Task", ""]])
+  assert.equal(T.editTask(next, "a", "Call the bank", "Bring the receipt"), next)
+  assert.equal(T.editTask(tasks, "missing", "x", "y"), tasks)
+  // An empty title keeps the old one; an empty description removes it.
+  assert.deepEqual(plain(T.editTask(next, "a", "  ", ""))[0], { ...plain(next)[0], description: "" })
+  assert.equal(T.editTask(next, "a", "", "Bring the receipt"), next)
+  assert.equal(T.findTask(next, "b"), next[1])
+  assert.equal(T.findTask(next, "missing"), null)
+})
+
 test("addTask puts a clean new task first and ignores empty text", () => {
   const before = [task({ id: "old" })]
-  const after = plain(T.addTask(before, "  Buy milk ", "2026-11-15", false, NOW, 0.5))
+  const after = plain(T.addTask(before, "  Buy milk ", " Oat, 2 l\r\n", "2026-11-15", false, NOW, 0.5))
   assert.equal(after.length, 2)
   assert.equal(after[0].text, "Buy milk")
+  assert.equal(after[0].description, "Oat, 2 l")
   assert.equal(after[0].due, "2026-11-15")
   assert.equal(after[0].starred, false)
   assert.equal(after[0].doneAt, null)
   assert.equal(after[0].createdAt, NOW)
   assert.match(after[0].id, /^[A-Za-z0-9_-]+$/)
-  assert.equal(T.addTask(before, "   ", null, false, NOW, 0.5), before)
-  assert.equal(plain(T.addTask([], "No date", "tomorrow", false, NOW, 0.1))[0].due, null)
+  assert.equal(T.addTask(before, "   ", "A description alone is not a task", null, false, NOW, 0.5), before)
+  assert.equal(plain(T.addTask([], "No date", "", "tomorrow", false, NOW, 0.1))[0].due, null)
+  assert.equal(plain(T.addTask([], "No description", undefined, null, false, NOW, 0.1))[0].description, "")
 })
 
 test("addTask stars the new task only when asked to", () => {
-  assert.equal(plain(T.addTask([], "Starred", null, true, NOW, 0.5))[0].starred, true)
-  assert.equal(plain(T.addTask([], "Truthy", null, "yes", NOW, 0.5))[0].starred, false)
-  assert.equal(plain(T.addTask([], "Left out", null, undefined, NOW, 0.5))[0].starred, false)
+  assert.equal(plain(T.addTask([], "Starred", "", null, true, NOW, 0.5))[0].starred, true)
+  assert.equal(plain(T.addTask([], "Truthy", "", null, "yes", NOW, 0.5))[0].starred, false)
+  assert.equal(plain(T.addTask([], "Left out", "", null, undefined, NOW, 0.5))[0].starred, false)
 })
 
 test("operations return new lists and leave the input alone", () => {
