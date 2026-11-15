@@ -218,7 +218,7 @@ function newId(now, random) {
   return "t" + Math.floor(now).toString(36) + Math.floor(random * 1679616).toString(36)
 }
 
-function addTask(tasks, text, due, now, random) {
+function addTask(tasks, text, due, starred, now, random) {
   var clean = cleanText(text)
   if (!clean || tasks.length >= MAX_TASKS) return tasks
   var id = newId(now, random)
@@ -227,7 +227,7 @@ function addTask(tasks, text, due, now, random) {
     id: id,
     text: clean,
     due: isDateKey(due) ? due : null,
-    starred: false,
+    starred: starred === true,
     createdAt: Math.floor(now),
     doneAt: null
   }].concat(tasks)

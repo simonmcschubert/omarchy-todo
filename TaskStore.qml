@@ -66,9 +66,9 @@ Item {
   }
 
   // Returns the new task's id, or "" when nothing was added.
-  function add(text, due) {
+  function add(text, due, starred) {
     return run("add", function() {
-      var next = Tasks.addTask(tasks, text, due, Date.now(), Math.random())
+      var next = Tasks.addTask(tasks, text, due, starred, Date.now(), Math.random())
       return next !== tasks && commit(next) ? next[0].id : ""
     })
   }

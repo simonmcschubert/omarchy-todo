@@ -114,7 +114,7 @@ test("serialize round-trips through parseStore", () => {
 
 test("addTask puts a clean new task first and ignores empty text", () => {
   const before = [task({ id: "old" })]
-  const after = plain(T.addTask(before, "  Buy milk ", "2026-11-15", NOW, 0.5))
+  const after = plain(T.addTask(before, "  Buy milk ", "2026-11-15", false, NOW, 0.5))
   assert.equal(after.length, 2)
   assert.equal(after[0].text, "Buy milk")
   assert.equal(after[0].due, "2026-11-15")
@@ -122,8 +122,14 @@ test("addTask puts a clean new task first and ignores empty text", () => {
   assert.equal(after[0].doneAt, null)
   assert.equal(after[0].createdAt, NOW)
   assert.match(after[0].id, /^[A-Za-z0-9_-]+$/)
-  assert.equal(T.addTask(before, "   ", null, NOW, 0.5), before)
-  assert.equal(plain(T.addTask([], "No date", "tomorrow", NOW, 0.1))[0].due, null)
+  assert.equal(T.addTask(before, "   ", null, false, NOW, 0.5), before)
+  assert.equal(plain(T.addTask([], "No date", "tomorrow", false, NOW, 0.1))[0].due, null)
+})
+
+test("addTask stars the new task only when asked to", () => {
+  assert.equal(plain(T.addTask([], "Starred", null, true, NOW, 0.5))[0].starred, true)
+  assert.equal(plain(T.addTask([], "Truthy", null, "yes", NOW, 0.5))[0].starred, false)
+  assert.equal(plain(T.addTask([], "Left out", null, undefined, NOW, 0.5))[0].starred, false)
 })
 
 test("operations return new lists and leave the input alone", () => {
