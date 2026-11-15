@@ -56,12 +56,30 @@ Item {
     var view = viewFor(payload)
     if (view === "window") {
       dropdownView = ""
-      appWindow.visible = true
-      Qt.callLater(appView.focusInput)
+      showWindow()
     } else {
       dropdownView = view
       Qt.callLater(dropView.focusInput)
     }
+  }
+
+  // Opens the window, or brings it forward when it is already open, perhaps
+  // on another workspace, as the app launcher does for other apps.
+  function showWindow() {
+    var toplevel = appWindow.visible ? windowToplevel() : null
+    if (toplevel) toplevel.activate()
+    else appWindow.visible = true
+    Qt.callLater(appView.focusInput)
+  }
+
+  // The window's handle in the compositor's window list; null until it shows.
+  function windowToplevel() {
+    var toplevels = ToplevelManager.toplevels.values
+    for (var i = 0; i < toplevels.length; i++) {
+      var toplevel = toplevels[i]
+      if (toplevel.appId === "org.quickshell" && toplevel.title === appWindow.title) return toplevel
+    }
+    return null
   }
 
   // Host-initiated close (`shell hide`, toggle). The window stays open.
@@ -163,6 +181,11 @@ Item {
     implicitWidth: 620
     implicitHeight: 720
     minimumSize: Qt.size(420, 420)
+
+    // Closing the window (Super+W) hides it, but Quickshell 0.3 keeps the
+    // `visible = true` it was opened with, so setting it again would show
+    // nothing until the shell restarts. Clear it, so the next open shows it.
+    onClosed: visible = false
 
     TaskView {
       id: appView
