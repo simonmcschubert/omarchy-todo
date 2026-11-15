@@ -80,13 +80,19 @@ FocusScope {
     selectedId = ""
   }
   // Also when the open task is deleted elsewhere.
-  onTaskOpenChanged: if (!taskOpen) input.forceActiveFocus()
+  onTaskOpenChanged: if (!taskOpen) focusNewTask()
 
   // Back to the list, ready to type a new task.
   function focusInput() {
     shortcutsShown = false
     detail.hide()
-    input.forceActiveFocus()
+    focusNewTask()
+  }
+
+  // The new task's field: its description while that is open, so Ctrl+D or
+  // Ctrl+F there does not move the typing to the title.
+  function focusNewTask() {
+    (describing ? newDescription : input).forceActiveFocus()
   }
 
   function openTask(id) {
@@ -169,15 +175,22 @@ FocusScope {
     } else if (ctrl && key === Qt.Key_2) {
       focusInput()
       tab = "done"
-    } else if (mods === 0 && !shortcutsShown && !taskOpen && (key === Qt.Key_Down || key === Qt.Key_Up)) {
+    } else if (mods === 0 && !shortcutsShown && !taskOpen && !newDescription.activeFocus
+               && (key === Qt.Key_Down || key === Qt.Key_Up)) {
       moveSelection(key === Qt.Key_Down ? 1 : -1)
-    } else if (mods === 0 && (key === Qt.Key_Return || key === Qt.Key_Enter) && selectedTask
-               && !shortcutsShown && !taskOpen && input.text.trim() === "") {
-      // Enter with nothing typed opens the selected task.
-      openTask(selectedTask.id)
     } else {
       return false
     }
+    return true
+  }
+
+  // Enter in the field with nothing typed opens the selected task. Only
+  // there: after adding a typed task, the field passes Enter on to the view.
+  function openOnEnter(event) {
+    var mods = event.modifiers & (Qt.ControlModifier | Qt.ShiftModifier | Qt.AltModifier | Qt.MetaModifier)
+    if (mods !== 0 || (event.key !== Qt.Key_Return && event.key !== Qt.Key_Enter)) return false
+    if (!selectedTask || shortcutsShown || taskOpen || input.text.trim() !== "") return false
+    openTask(selectedTask.id)
     return true
   }
 
@@ -327,7 +340,7 @@ FocusScope {
         onTextEdited: view.selectedId = ""
         // Before the field's own keys, so a shortcut never edits the text.
         Keys.onPressed: function(event) {
-          if (view.handleKey(event)) event.accepted = true
+          if (view.handleKey(event) || view.openOnEnter(event)) event.accepted = true
         }
         Keys.onTabPressed: view.describeNew()
       }
