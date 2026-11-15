@@ -8,6 +8,10 @@ import "tasks.js" as Tasks
 
 // Due date picker: quick choices and a month calendar. Emits picked("") for
 // "No date".
+//
+// It opens below `anchorItem`, or above it when there is more room there, and
+// always stays inside `boundsItem` (the whole window when unset). When even
+// that does not fit, the day cells shrink.
 Popup {
   id: picker
 
@@ -25,16 +29,63 @@ Popup {
   property color hoverFill: Commons.Color.menu.selectedBackground
   property string fontFamily: Style.font.family
 
+  property Item anchorItem: null
+  property Item boundsItem: null
+  // Both in the parent's coordinates, measured by place().
+  property rect anchorRect: Qt.rect(0, 0, 0, 0)
+  property rect boundsRect: Qt.rect(0, 0, 0, 0)
+  readonly property int gap: Style.spacing.sm
+
   readonly property var cells: Tasks.monthGrid(viewYear, viewMonth, firstDayOfWeek)
-  readonly property int cellSize: Style.space(30)
+  readonly property int naturalCell: Style.space(30)
+  readonly property int minimumCell: Style.space(18)
+  // Everything but the day cells, so the cells alone can shrink to fit.
+  readonly property real chromeWidth: leftPadding + rightPadding + 6 * days.spacing
+  readonly property real chromeHeight: topPadding + bottomPadding + quickChoices.implicitHeight
+    + monthRow.implicitHeight + weekdayHeight + 2 * content.spacing + 6 * days.spacing
+  readonly property int weekdayHeight: Math.ceil(captionMetrics.height)
+
+  readonly property real roomBelow: boundsRect.y + boundsRect.height - (anchorRect.y + anchorRect.height + gap)
+  readonly property real roomAbove: anchorRect.y - gap - boundsRect.y
+  readonly property bool opensBelow: {
+    var natural = chromeHeight + 6 * naturalCell
+    return natural <= roomBelow || (natural > roomAbove && roomBelow >= roomAbove)
+  }
+  readonly property int cellSize: Math.max(minimumCell, Math.min(naturalCell,
+    Math.floor(((opensBelow ? roomBelow : roomAbove) - chromeHeight) / 6),
+    Math.floor((boundsRect.width - chromeWidth) / 7)))
 
   signal picked(string due)
+
+  function clamp(value, low, high) {
+    return Math.max(low, Math.min(value, high))
+  }
+
+  // Measures where the anchor and the bounds are now. Positions come from
+  // the bindings below, so they follow the picker's real size.
+  function place() {
+    var host = parent
+    if (!host) return
+    var bounds = boundsItem
+    if (!bounds) {
+      bounds = host
+      while (bounds.parent) bounds = bounds.parent
+    }
+    var b = bounds.mapToItem(host, 0, 0)
+    boundsRect = Qt.rect(b.x + gap, b.y + gap,
+                         Math.max(0, bounds.width - gap * 2), Math.max(0, bounds.height - gap * 2))
+    if (anchorItem) {
+      var a = anchorItem.mapToItem(host, 0, 0)
+      anchorRect = Qt.rect(a.x, a.y, anchorItem.width, anchorItem.height)
+    }
+  }
 
   function openFor(current) {
     selected = current || ""
     var base = Tasks.parseDateKey(selected || today) || new Date()
     viewYear = base.getFullYear()
     viewMonth = base.getMonth()
+    place()
     open()
   }
 
@@ -54,6 +105,32 @@ Popup {
   closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
   padding: Style.spacing.popupPadding
 
+  width: Math.min(implicitWidth, boundsRect.width)
+  // Right edges line up with the anchor's; below it, or above it.
+  x: clamp(anchorRect.x + anchorRect.width - width,
+           boundsRect.x, boundsRect.x + boundsRect.width - width)
+  y: clamp(opensBelow ? anchorRect.y + anchorRect.height + gap : anchorRect.y - gap - height,
+           boundsRect.y, boundsRect.y + boundsRect.height - height)
+
+  // Follow the anchor while open: the window resizing moves it.
+  Connections {
+    target: picker.opened ? picker.parent : null
+    function onWidthChanged() { picker.place() }
+    function onHeightChanged() { picker.place() }
+  }
+  Connections {
+    target: picker.opened ? picker.anchorItem : null
+    function onXChanged() { picker.place() }
+    function onYChanged() { picker.place() }
+    function onWidthChanged() { picker.place() }
+  }
+
+  FontMetrics {
+    id: captionMetrics
+    font.family: picker.fontFamily
+    font.pixelSize: Style.font.caption
+  }
+
   background: Rectangle {
     color: picker.surface
     border.color: picker.border
@@ -62,9 +139,11 @@ Popup {
   }
 
   contentItem: ColumnLayout {
+    id: content
     spacing: Style.spacing.lg
 
     GridLayout {
+      id: quickChoices
       columns: 3
       columnSpacing: Style.spacing.sm
       rowSpacing: Style.spacing.sm
@@ -93,6 +172,7 @@ Popup {
     }
 
     RowLayout {
+      id: monthRow
       Layout.fillWidth: true
       Ui.Button {
         iconText: ""
@@ -119,6 +199,7 @@ Popup {
     }
 
     Grid {
+      id: days
       columns: 7
       spacing: Style.spacing.xxs
       Layout.alignment: Qt.AlignHCenter
@@ -128,6 +209,7 @@ Popup {
         delegate: Text {
           required property var modelData
           width: picker.cellSize
+          height: picker.weekdayHeight
           horizontalAlignment: Text.AlignHCenter
           textFormat: Text.PlainText
           text: modelData
