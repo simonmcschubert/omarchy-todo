@@ -24,6 +24,11 @@ FocusScope {
   property string fontFamily: Style.font.family
   readonly property color dim: Util.alpha(foreground, 0.55)
 
+  // Typed in since the last save. Only these fields are saved, so a field
+  // nobody typed in never overwrites a change from elsewhere.
+  property bool titleEdited: false
+  property bool descriptionEdited: false
+
   signal backRequested()
 
   implicitHeight: layout.implicitHeight
@@ -46,7 +51,11 @@ FocusScope {
   // Saves now instead of after the typing pause.
   function save() {
     saveTimer.stop()
-    if (task) store.edit(taskId, titleField.text, descriptionField.text)
+    if (task && (titleEdited || descriptionEdited))
+      store.edit(taskId, titleEdited ? titleField.text : task.text,
+                 descriptionEdited ? descriptionField.text : task.description)
+    titleEdited = false
+    descriptionEdited = false
   }
 
   // Shows what is stored in the fields not being edited.
@@ -115,7 +124,10 @@ FocusScope {
       Keys.onReturnPressed: descriptionField.forceActiveFocus()
       Keys.onEnterPressed: descriptionField.forceActiveFocus()
       Keys.onTabPressed: descriptionField.forceActiveFocus()
-      onTextChanged: if (detail.task) saveTimer.restart()
+      onTextChanged: if (activeFocus) {
+        detail.titleEdited = true
+        saveTimer.restart()
+      }
       onActiveFocusChanged: if (!activeFocus) detail.leaveField()
     }
 
@@ -144,7 +156,10 @@ FocusScope {
         accent: detail.accent
         font.family: detail.fontFamily
         Keys.onBacktabPressed: titleField.forceActiveFocus()
-        onTextChanged: if (detail.task) saveTimer.restart()
+        onTextChanged: if (activeFocus) {
+          detail.descriptionEdited = true
+          saveTimer.restart()
+        }
         onActiveFocusChanged: if (!activeFocus) detail.leaveField()
       }
     }
