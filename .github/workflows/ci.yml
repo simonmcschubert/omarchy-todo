@@ -28,4 +28,4 @@ jobs:
           bash /tmp/omarchy-plugin-validate .
 
       - name: Shell scripts
-        run: shellcheck setup dev/act dev/desktop dev/demo-tasks dev/systemd-cat
+        run: shellcheck setup update dev/act dev/desktop dev/demo-tasks dev/systemd-cat

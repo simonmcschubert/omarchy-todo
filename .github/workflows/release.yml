@@ -1,0 +1,134 @@
+# Maintainers start a release in Actions > Release > Run workflow (README.md,
+# "Releases"). Installed copies of To Do find it within four hours and offer it
+# with their Update button (Updater.qml, update).
+#
+# Refuses unless started from main, CI passed for the commit, and something
+# changed since the last release. Raises the latest vX.Y.Z tag by the chosen
+# part, tags the commit, pushes only the tag, and creates the GitHub Release
+# with notes from the merged pull requests. No file holds the version and
+# nothing is pushed to main. A release candidate is vX.Y.Z-rc.N, a
+# pre-release that installed copies do not offer. A dry run shows the version
+# and notes and pushes nothing.
+# Only GitHub-owned actions pinned by commit SHA, as in ci.yml.
+
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: Version part to raise (the first release starts from 0.0.0)
+        type: choice
+        options: [patch, minor, major]
+        default: patch
+      candidate:
+        description: "Release candidate: publish vX.Y.Z-rc.N for testing (not offered as an update)"
+        type: boolean
+        default: false
+      dry_run:
+        description: "Dry run: show the version and notes, publish nothing"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release
+
+env:
+  # This workflow must have passed for the commit being released.
+  CI_WORKFLOW: ci.yml
+
+jobs:
+  release:
+    name: Version, tag, and publish
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      actions: read # find the CI run of the commit
+      contents: write # push the tag, create the release
+    steps:
+      - name: Require main
+        if: github.ref != 'refs/heads/main'
+        run: |
+          echo "::error::Start releases from main, not ${GITHUB_REF_NAME}."
+          exit 1
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0 # every tag
+          # A release pushes its tag with these credentials; a dry run needs none.
+          persist-credentials: ${{ !inputs.dry_run }}
+
+      - name: Release
+        env:
+          BUMP: ${{ inputs.bump }}
+          CANDIDATE: ${{ inputs.candidate }}
+          DRY_RUN: ${{ inputs.dry_run }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          fail() {
+            echo "::error::$1"
+            exit 1
+          }
+
+          passed=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/$CI_WORKFLOW/runs?head_sha=$GITHUB_SHA&status=success" --jq .total_count)
+          [ "$passed" != 0 ] || fail "CI has not passed for $GITHUB_SHA. Wait for CI on main to finish, then start the release again."
+
+          # The tags hold the version: the newest release without a suffix,
+          # e.g. v1.2.3, raised by the chosen part. The first release starts
+          # from 0.0.0, so minor makes it 0.1.0.
+          previous=$(git tag --list 'v[0-9]*' --sort=-version:refname | awk '/^v[0-9]+\.[0-9]+\.[0-9]+$/ && !found { print; found = 1 }')
+          if [ -n "$previous" ]; then
+            [ "$(git rev-parse "$previous^{commit}")" != "$(git rev-parse HEAD)" ] || fail "Nothing to release: main has no changes since $previous."
+          fi
+          current=${previous#v}
+          IFS=. read -r major minor patch <<< "${current:-0.0.0}"
+          case "$BUMP" in
+            major) next="$((major + 1)).0.0" ;;
+            minor) next="$major.$((minor + 1)).0" ;;
+            patch) next="$major.$minor.$((patch + 1))" ;;
+            *) fail "bump must be patch, minor or major, not '$BUMP'." ;;
+          esac
+
+          if [ "$CANDIDATE" = true ]; then
+            [ -z "$(git tag --points-at HEAD --list "v$next-rc.*")" ] || fail "This commit is already a candidate for $next."
+            last=$(git tag --list "v$next-rc.*" | sed -nE 's/^v.*-rc\.([0-9]+)$/\1/p' | sort -n | tail -n 1)
+            version="$next-rc.$((${last:-0} + 1))"
+            prerelease=true
+          else
+            version="$next"
+            prerelease=false
+          fi
+          tag="v$version"
+          ! git rev-parse --quiet --verify "refs/tags/$tag" > /dev/null || fail "The tag $tag exists already."
+
+          notes_from=(-f "tag_name=$tag" -f "target_commitish=$GITHUB_SHA")
+          if [ -n "$previous" ]; then
+            notes_from+=(-f "previous_tag_name=$previous")
+          fi
+          notes=$(gh api "repos/$GITHUB_REPOSITORY/releases/generate-notes" "${notes_from[@]}" --jq .body)
+          git show --no-patch --format='%H %s' HEAD
+
+          if [ "$DRY_RUN" = true ]; then
+            printf '## Dry run: %s\n\nNothing was pushed or published. A real run would publish:\n\n%s\n' "$tag" "$notes" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag --annotate "$tag" --message "$tag"
+          git push origin "refs/tags/$tag"
+
+          latest=true
+          if [ "$prerelease" = true ]; then latest=false; fi
+          url=$(gh api "repos/$GITHUB_REPOSITORY/releases" \
+            -f tag_name="$tag" \
+            -f name="$tag" \
+            -f body="$notes" \
+            -F prerelease="$prerelease" \
+            -f make_latest="$latest" \
+            --jq .html_url)
+          printf '## %s\n\n%s\n' "$tag" "$url" >> "$GITHUB_STEP_SUMMARY"
+          echo "$url"

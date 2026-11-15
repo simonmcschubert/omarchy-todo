@@ -76,7 +76,9 @@ Item {
 
   ErrorReports {
     id: reports
-    release: "omarchy-todo@" + (root.manifest && root.manifest.version ? root.manifest.version : "unknown")
+    // The installed release, from the checkout's tags; manifest.json's
+    // version for a copy without them.
+    release: "omarchy-todo@" + (updater.installed || (root.manifest && root.manifest.version ? root.manifest.version : "unknown"))
     pluginUrl: Qt.resolvedUrl(".")
   }
 
@@ -84,6 +86,8 @@ Item {
     id: store
     reports: reports
   }
+
+  Updater { id: updater }
 
   Ui.OverlayWindow {
     id: dropdown
@@ -136,6 +140,7 @@ Item {
         anchors.fill: parent
         anchors.margins: Style.spacing.panelPadding
         store: store
+        updater: updater
         compact: true
         addOnly: root.dropdownView === "add"
         focus: true
@@ -162,6 +167,7 @@ Item {
       anchors.fill: parent
       anchors.margins: Style.spacing.panelPadding
       store: store
+      updater: updater
       compact: false
       focus: true
       // Esc does not close the window; Super+W does, like any window.

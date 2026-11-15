@@ -53,14 +53,27 @@ omarchy-shell shell summon simonmcschubert.todo window   # window
 
 ## Update
 
+To Do looks for a new release 15 seconds after the shell starts and every four
+hours. When there is one, **Update** appears next to Esc. Click it to download
+the release, then click **Restart to update** to install it and restart the
+Omarchy shell. A notification confirms the update or says why it failed.
+Like `omarchy plugin update --yes`, this does not show the changes first; the
+release notes on GitHub list them. Updates never touch the tasks.
+
+The same from a terminal:
+
 ```bash
-omarchy plugin update simonmcschubert.todo && omarchy restart shell
+~/.config/omarchy/plugins/simonmcschubert.todo/update check
+~/.config/omarchy/plugins/simonmcschubert.todo/update install 0.2.0
 ```
 
-The update shows the changes and asks first. The shell keeps loaded plugin
-code until it restarts, so restart it after an update. Updates never touch the
-tasks. Run `setup` again after an update to get new shortcuts (such as
-`Super+Alt+N` for quick add) and the current names in the app launcher.
+`omarchy plugin update simonmcschubert.todo && omarchy restart shell` works
+too. It shows the changes and asks first, but takes the newest commit on
+`main`, released or not. The shell keeps loaded plugin code until it restarts,
+so restart it after an update.
+
+Run `setup` again after an update to get new shortcuts (such as `Super+Alt+N`
+for quick add) and the current names in the app launcher.
 
 ## Tasks file
 
@@ -100,6 +113,9 @@ The tasks file stays.
   `addOnly`, the quick add field), the date picker, loading and saving.
 - `ErrorReports.qml`, `sentry.js`: error reports to Sentry (no SDK exists
   for QML; `sentry.js` builds the events, tested by `node --test`).
+- `update`, `Updater.qml`: finding, downloading, and installing releases, and
+  the update button's state. Tests against real git repositories:
+  `test/update.test.mjs`.
 
 `dev/` runs a headless Omarchy desktop in Docker: Hyprland nested in a
 headless Mutter, the real Omarchy shell (release pinned in `dev/Dockerfile`),
@@ -119,7 +135,18 @@ docker exec todo-dev act reload    # after a code change
 `DEMO=1` starts with demo tasks. Error reports from the container go to
 Sentry with environment `development`; add `-e DO_NOT_TRACK=1` to send none.
 `dev/act` lists all commands. Hyprland ignores shortcuts from virtual
-keyboards, so test a shortcut by running its command.
+keyboards, so test a shortcut by running its command. The container installs
+a copy without `.git`, so To Do offers no updates there.
+
+## Releases
+
+Actions › Release › Run workflow, with patch, minor, or major; the first
+release starts from 0.0.0, so minor gives 0.1.0. The workflow tags the `main`
+commit that passed CI as `vX.Y.Z` and creates the GitHub Release with notes
+from the merged pull requests. The tags hold the version, and error reports
+name the installed one (`update version`). Installed copies offer the release
+within four hours. "Release candidate" publishes `vX.Y.Z-rc.N`, which they do
+not offer, and "Dry run" shows the version and notes without publishing.
 
 ## License
 
