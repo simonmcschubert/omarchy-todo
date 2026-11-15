@@ -82,7 +82,8 @@ Item {
       if (exitCode !== 0) {
         // Keep what an earlier check found; offline is no reason to hide it.
         console.warn("omarchy-todo: update check failed:", message)
-        if (asked) checkError = message.replace(/^update: /, "") || "the update script failed"
+        // The script's own reason is the last line, after git's.
+        if (asked) checkError = message.split("\n").pop().replace(/^update: /, "") || "the update script failed"
         return
       }
       checkError = ""
