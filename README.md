@@ -1,7 +1,7 @@
 # To Do
 
-A to-do list for [Omarchy](https://omarchy.org/): a drop-down panel and an app
-window over one list, with due dates and starred tasks. No account and no
+A to-do list for [Omarchy](https://omarchy.org/): a drop-down panel, a quick
+add field, and an app window over one list, with due dates and starred tasks. No account and no
 sync: tasks stay in one file on this computer. Errors are reported to Sentry,
 without task text (see [Error reports](#error-reports)).
 
@@ -18,7 +18,7 @@ omarchy plugin add https://github.com/simonmcschubert/omarchy-todo.git --enable
 
 `omarchy plugin add` copies this repository to
 `~/.config/omarchy/plugins/simonmcschubert.todo/` and asks before it installs.
-`setup` adds the two keyboard shortcuts to `~/.config/hypr/bindings.lua` and
+`setup` adds the three keyboard shortcuts to `~/.config/hypr/bindings.lua` and
 puts To Do in the app launcher.
 
 ## Use
@@ -26,9 +26,12 @@ puts To Do in the app launcher.
 | | |
 | --- | --- |
 | `Super+Alt+T` | Drop-down on and off. `Esc` or a click outside closes it. |
+| `Super+Alt+N` | Quick add on and off: only the field for a new task, no list. It closes once the task is added. |
 | `Super+Shift+Alt+T` | App window (also "To Do" in the app launcher). `Super+W` closes it. |
 | `Enter` | Adds the typed task. Pick a date with **Due** first to give it one. |
 | `Ctrl+1` / `Ctrl+2` | To do / Done. |
+
+![Quick add](docs/quick-add.png)
 
 - Click the box to finish a task. Untick it under Done to bring it back.
 - Click the star to make a task a priority. Starred tasks stay at the top.
@@ -42,6 +45,7 @@ From a terminal or script:
 
 ```bash
 omarchy-shell shell toggle simonmcschubert.todo          # drop-down
+omarchy-shell shell toggle simonmcschubert.todo add      # quick add
 omarchy-shell shell summon simonmcschubert.todo window   # window
 ```
 
@@ -55,8 +59,8 @@ omarchy plugin update simonmcschubert.todo && omarchy restart shell
 
 The update shows the changes and asks first. The shell keeps loaded plugin
 code until it restarts, so restart it after an update. Updates never touch the
-tasks. Run `setup` again after updating from a version named Task, so the
-shortcuts and the app launcher say To Do.
+tasks. Run `setup` again after an update to get new shortcuts (such as
+`Super+Alt+N` for quick add) and the current names in the app launcher.
 
 ## Tasks file
 
@@ -91,9 +95,9 @@ The tasks file stays.
 
 - `tasks.js`: task logic (storage format, sorting, dates). Tests:
   `node --test`.
-- `Main.qml`: plugin entry: the drop-down and the window.
-- `TaskView.qml`, `DatePicker.qml`, `TaskStore.qml`: the list, the date
-  picker, loading and saving.
+- `Main.qml`: plugin entry: the drop-down, quick add, and the window.
+- `TaskView.qml`, `DatePicker.qml`, `TaskStore.qml`: the list (with
+  `addOnly`, the quick add field), the date picker, loading and saving.
 - `ErrorReports.qml`, `sentry.js`: error reports to Sentry (no SDK exists
   for QML; `sentry.js` builds the events, tested by `node --test`).
 

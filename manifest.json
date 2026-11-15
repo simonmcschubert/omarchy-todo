@@ -4,7 +4,7 @@
   "name": "To Do",
   "version": "0.1.0",
   "author": "Simon Schubert",
-  "description": "To-do list with due dates and starred tasks, as a drop-down panel and an app window. Drop-down: omarchy-shell shell toggle simonmcschubert.todo. Window: omarchy-shell shell summon simonmcschubert.todo window",
+  "description": "To-do list with due dates and starred tasks, as a drop-down panel, quick add, and an app window. Drop-down: omarchy-shell shell toggle simonmcschubert.todo. Quick add: omarchy-shell shell toggle simonmcschubert.todo add. Window: omarchy-shell shell summon simonmcschubert.todo window",
   "kinds": [
     "panel"
   ],

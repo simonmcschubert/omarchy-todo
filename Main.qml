@@ -5,9 +5,10 @@ import qs.Commons
 import qs.Commons as Commons
 import qs.Ui as Ui
 
-// To Do: a drop-down panel and an app window over one task list.
+// To Do: a drop-down panel, quick add, and an app window over one task list.
 //
 //   omarchy-shell shell toggle simonmcschubert.todo          drop-down on/off
+//   omarchy-shell shell toggle simonmcschubert.todo add      quick add on/off
 //   omarchy-shell shell summon simonmcschubert.todo window   open the window
 Item {
   id: root
@@ -19,41 +20,45 @@ Item {
 
   readonly property string pluginId: manifest && manifest.id ? manifest.id : "simonmcschubert.todo"
 
-  property bool dropdownShown: false
+  // What the drop-down card shows: "dropdown" (the list), "add" (quick add:
+  // only the field for a new task), or "" while it is hidden.
+  property string dropdownView: ""
   // The shell's toggle asks this; the window is a normal app window outside it.
-  readonly property bool opened: dropdownShown
+  readonly property bool opened: dropdownView !== ""
 
-  // Payload: "window", or JSON {"view": "window"}; anything else is the drop-down.
+  // Payload: "window" or "add", or JSON {"view": "window"} / {"view": "add"};
+  // anything else is the drop-down.
   function viewFor(payload) {
     var text = String(payload || "").trim()
-    if (text === "window") return "window"
+    if (text === "window" || text === "add") return text
     try {
       var parsed = JSON.parse(text)
-      if (parsed && parsed.view === "window") return "window"
+      if (parsed && (parsed.view === "window" || parsed.view === "add")) return parsed.view
     } catch (e) {}
     return "dropdown"
   }
 
   function open(payload) {
     store.refreshToday()
-    if (viewFor(payload) === "window") {
-      dropdownShown = false
+    var view = viewFor(payload)
+    if (view === "window") {
+      dropdownView = ""
       appWindow.visible = true
       Qt.callLater(appView.focusInput)
     } else {
-      dropdownShown = true
+      dropdownView = view
       Qt.callLater(dropView.focusInput)
     }
   }
 
   // Host-initiated close (`shell hide`, toggle). The window stays open.
   function close() {
-    dropdownShown = false
+    dropdownView = ""
   }
 
   function dismissDropdown() {
     if (shell && typeof shell.hide === "function") shell.hide(pluginId)
-    dropdownShown = false
+    dropdownView = ""
   }
 
   ErrorReports {
@@ -69,7 +74,7 @@ Item {
 
   Ui.OverlayWindow {
     id: dropdown
-    shown: root.dropdownShown
+    shown: root.opened
     WlrLayershell.namespace: "omarchy-todo"
 
     // Click outside the card to close.
@@ -106,8 +111,11 @@ Item {
         anchors.margins: Style.spacing.panelPadding
         store: store
         compact: true
+        addOnly: root.dropdownView === "add"
         focus: true
         onCloseRequested: root.dismissDropdown()
+        // Quick add is done once the task is in.
+        onAdded: if (addOnly) root.dismissDropdown()
       }
     }
   }
