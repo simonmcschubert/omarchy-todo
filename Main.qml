@@ -163,6 +163,8 @@ Item {
         updater: updater
         compact: true
         addOnly: root.dropdownView === "add"
+        // The drop-down shows only Focus; the window has all tabs.
+        focusOnly: true
         focus: true
         // The picker may hang below a short card, but not over the bar.
         popupBounds: safeArea

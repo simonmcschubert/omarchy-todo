@@ -21,8 +21,10 @@ Item {
   property string today: Tasks.dateKey(new Date())
   property string lastText: ""
 
+  readonly property var focusRows: Tasks.rows(Tasks.focusSections(tasks, today))
   readonly property var openRows: Tasks.rows(Tasks.openSections(tasks, today))
   readonly property var doneRows: Tasks.rows(Tasks.doneSections(tasks, today))
+  readonly property int focusCount: Tasks.countFocus(tasks, today)
   readonly property int openCount: Tasks.countOpen(tasks)
   readonly property int doneCount: Tasks.countDone(tasks)
 

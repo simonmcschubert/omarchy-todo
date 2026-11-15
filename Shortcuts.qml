@@ -10,6 +10,8 @@ FocusScope {
   id: box
 
   property bool compact: false
+  // Only the Focus tab is shown (the drop-down), so no keys switch tabs.
+  property bool focusOnly: false
 
   property color foreground: Commons.Color.menu.text
   property color background: Commons.Color.menu.background
@@ -30,12 +32,15 @@ FocusScope {
       { keys: ["", ""], text: "Select a task in the list" },
       { keys: ["Enter"], text: "Open the selected task (nothing typed)" },
       { keys: ["Ctrl+D"], text: "Due date of the selected or typed task" },
-      { keys: ["Ctrl+F"], text: "Star or unstar the selected or typed task" },
-      { keys: ["Ctrl+1"], text: "To do" },
-      { keys: ["Ctrl+2"], text: "Done" },
+      { keys: ["Ctrl+F"], text: "Star or unstar the selected or typed task" }
+    ].concat(focusOnly ? [] : [
+      { keys: ["Ctrl+1"], text: "Focus: starred and due today" },
+      { keys: ["Ctrl+2"], text: "To do" },
+      { keys: ["Ctrl+3"], text: "Done" }
+    ]).concat([
       { keys: ["Ctrl+?"], text: "These shortcuts" },
       { keys: ["Esc"], text: compact ? "Back from a task, unselect it, or close" : "Back from a task, or unselect it" }
-    ].concat(compact ? [] : [{ keys: ["Super+W"], text: "Close the window" }]) },
+    ]).concat(compact ? [] : [{ keys: ["Super+W"], text: "Close the window" }]) },
     { title: "Date picker", rows: [
       { keys: ["", ""], text: "Day before or after" },
       { keys: ["", ""], text: "Week before or after" },

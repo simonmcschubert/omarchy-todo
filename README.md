@@ -5,7 +5,7 @@ add field, and an app window over one list, with due dates and starred tasks. No
 sync: tasks stay in one file on this computer. Errors are reported to Sentry,
 without task text (see [Error reports](#error-reports)).
 
-![Drop-down panel](docs/dropdown.png)
+![Drop-down panel: the Focus list](docs/dropdown.png)
 
 ## Install
 
@@ -25,7 +25,7 @@ puts To Do in the app launcher.
 
 | | |
 | --- | --- |
-| `Super+Alt+T` | Drop-down on and off. `Esc` or a click outside closes it. |
+| `Super+Alt+T` | Drop-down on and off: the Focus list. `Esc` or a click outside closes it. |
 | `Super+Alt+N` | Quick add on and off: only the field for a new task, no list. It closes once the task is added. `Ctrl+D` and `Ctrl+F` work there too. |
 | `Super+Shift+Alt+T` | App window (also "To Do" in the app launcher), or back to it when it is open on another workspace. `Super+W` closes it. |
 | `Enter` | Adds the typed task. Pick a date with **Due** (`Ctrl+D`) and a star (`Ctrl+F`) first to give it those. |
@@ -33,7 +33,7 @@ puts To Do in the app launcher.
 | `Up` / `Down` | Selects a task in the list. `Enter` with nothing typed opens it. Typing or `Esc` unselects it. |
 | `Ctrl+D` | Due date of the selected task, or of the typed task when none is selected. In the date picker, the arrow keys move the highlighted day, `PgUp` / `PgDn` the month, `Enter` picks it, and `1` to `6` pick Today, Tomorrow, Next Mon, In a week, In a month, and No date. |
 | `Ctrl+F` | Stars or unstars the selected task, or the typed task when none is selected. |
-| `Ctrl+1` / `Ctrl+2` | To do / Done. |
+| `Ctrl+1` / `Ctrl+2` / `Ctrl+3` | Focus / To do / Done, in the window. |
 | `Ctrl+?` | All keyboard shortcuts (also the keyboard icon at the top). `Esc` closes them. |
 
 ![Quick add](docs/quick-add.png)
@@ -48,6 +48,11 @@ puts To Do in the app launcher.
 - Click the star to make a task a priority. Starred tasks stay at the top.
 - Click a task's date (or the calendar icon on hover) to change or remove it.
 - The bin icon on hover deletes a task. **Clear done** empties the Done list.
+
+Focus shows only open tasks that are starred or due today, in Starred and
+Today. The drop-down shows only Focus; the window also has To do and Done, and
+opens on To do. A task added in the drop-down that is neither starred nor due
+today goes to To do.
 
 To do is sorted into Starred, Overdue, Today, Tomorrow, Upcoming, and No date.
 The calendar's first weekday follows Omarchy's language setting.
