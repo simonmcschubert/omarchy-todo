@@ -5,7 +5,7 @@ import qs.Commons
 import qs.Commons as Commons
 import qs.Ui as Ui
 
-// Task: a drop-down panel and an app window over one task list.
+// To Do: a drop-down panel and an app window over one task list.
 //
 //   omarchy-shell shell toggle simonmcschubert.todo          drop-down on/off
 //   omarchy-shell shell summon simonmcschubert.todo window   open the window
@@ -56,7 +56,16 @@ Item {
     dropdownShown = false
   }
 
-  TaskStore { id: store }
+  ErrorReports {
+    id: reports
+    release: "omarchy-todo@" + (root.manifest && root.manifest.version ? root.manifest.version : "unknown")
+    pluginUrl: Qt.resolvedUrl(".")
+  }
+
+  TaskStore {
+    id: store
+    reports: reports
+  }
 
   Ui.OverlayWindow {
     id: dropdown
@@ -106,7 +115,7 @@ Item {
   FloatingWindow {
     id: appWindow
     visible: false
-    title: "Task"
+    title: "To Do"
     color: Commons.Color.menu.background
     implicitWidth: 620
     implicitHeight: 720
