@@ -36,6 +36,7 @@ FocusScope {
   // Shows the task with this id, with the cursor at the start of its description.
   function show(id) {
     save()
+    forgetTyping()
     taskId = id
     titleField.text = task ? task.text : ""
     descriptionField.text = task ? task.description : ""
@@ -45,24 +46,33 @@ FocusScope {
 
   function hide() {
     save()
+    forgetTyping()
     taskId = ""
   }
 
-  // Saves now instead of after the typing pause.
+  // Saves now instead of after the typing pause. While the store refuses
+  // changes (it shows an error), the typed fields stay marked: leaving one
+  // keeps what was typed, and a later save writes it once the store can.
   function save() {
     saveTimer.stop()
-    if (task && (titleEdited || descriptionEdited))
-      store.edit(taskId, titleEdited ? titleField.text : task.text,
-                 descriptionEdited ? descriptionField.text : task.description)
+    if (!task || !(titleEdited || descriptionEdited)) return
+    store.edit(taskId, titleEdited ? titleField.text : task.text,
+               descriptionEdited ? descriptionField.text : task.description)
+    if (store.error === "") forgetTyping()
+  }
+
+  // Leaving the task drops typing the store refused.
+  function forgetTyping() {
     titleEdited = false
     descriptionEdited = false
   }
 
-  // Shows what is stored in the fields not being edited.
+  // Shows what is stored in the fields not being edited and not waiting to
+  // be saved.
   function refresh() {
     if (!task) return
-    if (!titleField.activeFocus && titleField.text !== task.text) titleField.text = task.text
-    if (!descriptionField.activeFocus && descriptionField.text !== task.description)
+    if (!titleField.activeFocus && !titleEdited && titleField.text !== task.text) titleField.text = task.text
+    if (!descriptionField.activeFocus && !descriptionEdited && descriptionField.text !== task.description)
       descriptionField.text = task.description
   }
 
