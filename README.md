@@ -141,9 +141,10 @@ The tasks file stays.
   saving. `TextBox.qml`: the text field for titles and descriptions.
 - `ErrorReports.qml`, `sentry.js`: error reports to Sentry (no SDK exists
   for QML; `sentry.js` builds the events, tested by `node --test`).
-- `update`, `Updater.qml`: finding, downloading, and installing releases, and
-  the update button's state. Tests against real git repositories:
-  `test/update.test.mjs`.
+- `update`, `Updater.qml`, `updates.js`: finding, downloading, and installing
+  releases. `updates.js` holds what a check found and which update button
+  each state shows. Tests: `test/update.test.mjs` (against real git
+  repositories) and `test/updates.test.mjs`.
 
 `dev/` runs a headless Omarchy desktop in Docker: Hyprland nested in a
 headless Mutter, the real Omarchy shell (release pinned in `dev/Dockerfile`),

@@ -41,37 +41,8 @@ FocusScope {
   // A task opened from the list replaces the list until Back or Esc.
   readonly property bool taskOpen: detail.task !== null
 
-  // The update button for each state of the updater (Updater.qml); null
-  // hides it. The window always shows it, as a circle that checks for
-  // updates when clicked. The drop-down shows it only to offer a release.
-  readonly property var updateButton: {
-    if (!updater) return null
-    var name = "To Do " + updater.version
-    switch (updater.status) {
-    case "available":
-      return { icon: "", text: "Update", color: accent, tip: name + " is available. Click to download it." }
-    case "downloading":
-      return { icon: "", text: "Downloading", color: accent, tip: "Downloading " + name + "." }
-    case "downloaded":
-      return { icon: "", text: "Restart to update", color: accent,
-               tip: name + " is downloaded. Click to restart the Omarchy shell with it. Your tasks stay as they are." }
-    case "installing":
-      return { icon: "", text: "Updating", color: accent, tip: "Installing " + name + " and restarting the shell.", busy: true }
-    case "failed":
-      return { icon: "", text: "Update failed", color: urgent, tip: "Can't download " + name + ". Click to try again." }
-    }
-    if (!inWindow) return null
-    var installed = updater.installed !== "" ? "To Do " + updater.installed : "To Do"
-    if (updater.checking)
-      return { icon: "", text: "", color: foreground, tip: "Checking for updates…", busy: true }
-    if (updater.checkError !== "")
-      return { icon: "", text: "Can't check", color: urgent,
-               tip: "Can't check for updates: " + updater.checkError + ". Click to try again." }
-    if (updater.confirmedCurrent)
-      return { icon: "", text: "Up to date", color: foreground, tip: installed + " is up to date." }
-    return { icon: "", text: "", color: foreground,
-             tip: (updater.installed !== "" ? installed + " is installed. " : "") + "Click to check for updates." }
-  }
+  // The update button (Updater.qml); null hides it.
+  readonly property var updateButton: updater ? updater.buttonFor(inWindow) : null
 
   signal closeRequested()
   signal added(string id)
@@ -241,7 +212,9 @@ FocusScope {
         iconText: view.updateButton ? view.updateButton.icon : ""
         iconSpinning: !!view.updateButton && view.updateButton.busy === true
         text: view.updateButton ? view.updateButton.text : ""
-        foreground: view.updateButton ? view.updateButton.color : view.foreground
+        foreground: !view.updateButton ? view.foreground
+          : view.updateButton.color === "accent" ? view.accent
+          : view.updateButton.color === "urgent" ? view.urgent : view.foreground
         fontFamily: view.fontFamily
         tooltipText: view.updateButton ? view.updateButton.tip : ""
         onClicked: view.updater.act()
