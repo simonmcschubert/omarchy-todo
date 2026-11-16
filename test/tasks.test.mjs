@@ -197,6 +197,16 @@ test("operations return new lists and leave the input alone", () => {
   assert.deepEqual(plain(tasks), snapshot)
 })
 
+test("a done task keeps its star and due date: the same list comes back", () => {
+  const tasks = [task({ id: "a", doneAt: 9, starred: true, due: "2026-11-20" })]
+
+  assert.equal(T.toggleStar(tasks, "a"), tasks)
+  assert.equal(T.setDue(tasks, "a", "2026-12-01"), tasks)
+  assert.equal(T.setDue(tasks, "a", ""), tasks)
+  assert.equal(T.toggleStar(tasks, "missing"), tasks)
+  assert.equal(T.setDue(tasks, "missing", "2026-12-01"), tasks)
+})
+
 test("open tasks: starred first, then by due date", () => {
   const tasks = [
     task({ id: "none", createdAt: 1 }),

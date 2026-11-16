@@ -138,15 +138,12 @@ FocusScope {
     else if (task.doneAt === null) openPicker(task.id, task.due || "", rowItemFor(task.id) || newDueButton)
   }
 
-  // Ctrl+F: star or unstar the selected task, or the typed task.
+  // Ctrl+F: star or unstar the selected task, or the typed task. A done
+  // task keeps its star (Tasks.toggleStar).
   function starTask() {
     var task = selectedTask
-    if (!task) {
-      newStarred = !newStarred
-    } else if (task.doneAt === null) {
-      store.toggleStar(task.id)
-      Qt.callLater(revealTask, task.id)
-    }
+    if (!task) newStarred = !newStarred
+    else if (store.toggleStar(task.id)) Qt.callLater(revealTask, task.id)
   }
 
   // Up and Down select the task above or below. Up from the first task

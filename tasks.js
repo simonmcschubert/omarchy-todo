@@ -277,9 +277,10 @@ function setDone(tasks, id, done, now) {
   return update(tasks, id, { doneAt: done ? Math.floor(now) : null })
 }
 
+// A done task keeps its star and due date: the same list.
 function toggleStar(tasks, id) {
   var task = findTask(tasks, id)
-  return task ? update(tasks, id, { starred: !task.starred }) : tasks
+  return task && task.doneAt === null ? update(tasks, id, { starred: !task.starred }) : tasks
 }
 
 // A new title and description. An empty title keeps the old one. The same
@@ -296,7 +297,8 @@ function editTask(tasks, id, text, description) {
 }
 
 function setDue(tasks, id, due) {
-  return update(tasks, id, { due: isDateKey(due) ? due : null })
+  var task = findTask(tasks, id)
+  return task && task.doneAt === null ? update(tasks, id, { due: isDateKey(due) ? due : null }) : tasks
 }
 
 function removeTask(tasks, id) {
