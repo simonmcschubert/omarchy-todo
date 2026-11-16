@@ -1,6 +1,7 @@
 import QtQuick
 import Quickshell
 import Quickshell.Io
+import "updates.js" as Updates
 
 // Offers new releases of To Do the way a desktop app offers its updates: it
 // checks shortly after the shell starts, every four hours, and when the
@@ -34,6 +35,15 @@ Item {
   property bool confirmedCurrent: false
   // The update button asked for the running check.
   property bool checkAsked: false
+
+  // The update button for the window or the drop-down; null hides it
+  // (updates.js).
+  function buttonFor(inWindow) {
+    return Updates.button({
+      status: status, version: version, installed: installed, checking: checking,
+      checkError: checkError, confirmedCurrent: confirmedCurrent
+    }, inWindow)
+  }
 
   // asked: the update button wants the result shown, not only a newer release.
   function check(asked) {
@@ -76,27 +86,18 @@ Item {
 
   function finished(action, exitCode, output, message) {
     if (action === "check") {
-      var words = output.trim().split(" ")
       var asked = checkAsked
       checkAsked = false
-      if (exitCode !== 0) {
-        // Keep what an earlier check found; offline is no reason to hide it.
-        console.warn("omarchy-todo: update check failed:", message)
-        // The script's own reason is the last line, after git's.
-        if (asked) checkError = message.split("\n").pop().replace(/^update: /, "") || "the update script failed"
-        return
+      if (exitCode !== 0) console.warn("omarchy-todo: update check failed:", message)
+      var change = Updates.checked(exitCode, output, message, asked)
+      if (change.checkError !== undefined) checkError = change.checkError
+      if (change.status !== undefined) {
+        status = change.status
+        version = change.version
       }
-      checkError = ""
-      if (words[0] === "available" || words[0] === "downloaded") {
-        status = words[0]
-        version = words[1]
-      } else {
-        status = ""
-        version = ""
-        if (asked) {
-          confirmedCurrent = true
-          confirmation.restart()
-        }
+      if (change.confirm) {
+        confirmedCurrent = true
+        confirmation.restart()
       }
     } else if (action === "download") {
       status = exitCode === 0 ? "downloaded" : "failed"
