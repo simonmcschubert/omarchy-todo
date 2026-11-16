@@ -5,31 +5,27 @@ import qs.Commons
 import qs.Commons as Commons
 import qs.Ui as Ui
 import "tasks.js" as Tasks
+import "list.js" as List
 
-// The task list UI, shown in both the drop-down and the window. With addOnly
-// it is just the field for a new task: no tabs and no list (quick add). With
-// focusOnly (the drop-down) it shows only the Focus tab.
+// The task list UI, shown in the window, the drop-down, and quick add
+// (surface). The window has all tabs, the drop-down only Focus, and quick
+// add is just the field for a new task: no tabs and no list. Which task a
+// key acts on, and what adding a task does, are the list rules in list.js:
+// this view keeps their state, sends them events, and applies the effects.
 FocusScope {
   id: view
 
   property var store: null
   property var updater: null
-  property bool compact: false
-  property bool addOnly: false
-  property bool focusOnly: false
-  // "focus" (starred or due today), "open" (To do), or "done".
-  property string tab: focusOnly ? "focus" : "open"
-  property string newDue: ""
-  property bool newStarred: false
-  // The task Ctrl+D and Ctrl+F act on. Arrow keys or a click select it,
-  // typing or Esc unselects it; the typed task is used while none is.
-  property string selectedId: ""
-  // The new task's description field is open (Tab in the input).
-  property bool describing: false
-  property string pickerTarget: ""
+  // "window", "dropdown", or "add" (quick add).
+  property string surface: "window"
+  readonly property bool inWindow: surface === "window"
+  readonly property bool quickAdd: surface === "add"
+  // The list rules' state (list.js): tab, selectedId, shortcutsShown,
+  // describing, newDue, newStarred, pickerTarget.
+  property var ui: List.initial("window")
   // Where the date picker may open. Unset, it is the whole window.
   property Item popupBounds: null
-  property bool shortcutsShown: false
 
   property color foreground: Commons.Color.menu.text
   property color background: Commons.Color.menu.background
@@ -40,16 +36,8 @@ FocusScope {
   property string fontFamily: Style.font.family
   readonly property color dim: Util.alpha(foreground, 0.55)
 
-  readonly property var rows: !store ? [] : (tab === "focus" ? store.focusRows
-                                           : tab === "open" ? store.openRows : store.doneRows)
-  // The selected task while it is in the list shown, else null. Quick add
-  // shows no list, so nothing is selected there.
-  readonly property var selectedTask: {
-    if (addOnly) return null
-    for (var i = 0; i < rows.length; i++)
-      if (rows[i].kind === "task" && rows[i].key === selectedId) return rows[i].task
-    return null
-  }
+  readonly property var rows: !store ? [] : (ui.tab === "focus" ? store.focusRows
+                                           : ui.tab === "open" ? store.openRows : store.doneRows)
   // A task opened from the list replaces the list until Back or Esc.
   readonly property bool taskOpen: detail.task !== null
 
@@ -72,7 +60,7 @@ FocusScope {
     case "failed":
       return { icon: "", text: "Update failed", color: urgent, tip: "Can't download " + name + ". Click to try again." }
     }
-    if (compact) return null
+    if (!inWindow) return null
     var installed = updater.installed !== "" ? "To Do " + updater.installed : "To Do"
     if (updater.checking)
       return { icon: "", text: "", color: foreground, tip: "Checking for updates…", busy: true }
@@ -90,147 +78,78 @@ FocusScope {
 
   // The drop-down grows to fit the shortcuts box when the list or task is shorter.
   implicitHeight: Math.max(taskOpen ? detail.implicitHeight : layout.implicitHeight,
-                           shortcutsShown ? shortcuts.implicitHeight : 0)
-  onTabChanged: {
-    flick.contentY = 0
-    selectedId = ""
-  }
+                           ui.shortcutsShown ? shortcuts.implicitHeight : 0)
+  // The surface is set by now: the window opens on To do, the others on Focus.
+  Component.onCompleted: ui = List.initial(surface)
   // Also when the open task is deleted elsewhere.
-  onTaskOpenChanged: if (!taskOpen) focusNewTask()
+  onTaskOpenChanged: if (!taskOpen) send({ type: "taskClosed" })
 
   // Back to the list, ready to type a new task.
   function focusInput() {
-    shortcutsShown = false
-    detail.hide()
-    focusNewTask()
-  }
-
-  // The new task's field: its description while that is open, so Ctrl+D or
-  // Ctrl+F there does not move the typing to the title.
-  function focusNewTask() {
-    (describing ? newDescription : input).forceActiveFocus()
-  }
-
-  function openTask(id) {
-    selectedId = id
-    detail.show(id)
-  }
-
-  function toggleShortcuts() {
-    if (shortcutsShown) {
-      focusInput()
-    } else {
-      shortcutsShown = true
-      shortcuts.forceActiveFocus()
-    }
-  }
-
-  function pickNewDue() {
-    shortcutsShown = false
-    openPicker("", newDue, newDueButton)
-  }
-
-  // Ctrl+D: the selected task's due date, or the typed task's. Done tasks
-  // keep theirs, as with the mouse.
-  function pickDue() {
-    var task = selectedTask
-    if (!task) pickNewDue()
-    else if (task.doneAt === null) openPicker(task.id, task.due || "", rowItemFor(task.id) || newDueButton)
-  }
-
-  // Ctrl+F: star or unstar the selected task, or the typed task. A done
-  // task keeps its star (Tasks.toggleStar).
-  function starTask() {
-    var task = selectedTask
-    if (!task) newStarred = !newStarred
-    else if (store.toggleStar(task.id)) Qt.callLater(revealTask, task.id)
-  }
-
-  // Up and Down select the task above or below. Up from the first task
-  // goes back to the typed task.
-  function moveSelection(delta) {
-    var ids = []
-    for (var i = 0; i < rows.length; i++)
-      if (rows[i].kind === "task") ids.push(rows[i].key)
-    var index = selectedTask ? ids.indexOf(selectedId) + delta : (delta > 0 ? 0 : -1)
-    if (index < 0) {
-      selectedId = ""
-    } else if (index < ids.length) {
-      selectedId = ids[index]
-      revealTask(selectedId)
-    }
-  }
-
-  // Shortcuts that work anywhere in the view, also while typing a task.
-  // Returns whether the key was one of them.
-  function handleKey(event) {
-    var mods = event.modifiers & (Qt.ControlModifier | Qt.ShiftModifier | Qt.AltModifier | Qt.MetaModifier)
-    var ctrl = (mods & Qt.ControlModifier) !== 0
-    var key = event.key
-    if (key === Qt.Key_Escape) {
-      if (shortcutsShown || taskOpen) focusInput()
-      else if (selectedTask) selectedId = ""
-      else closeRequested()
-    } else if (ctrl && key === Qt.Key_D) {
-      focusInput()
-      pickDue()
-    } else if (ctrl && key === Qt.Key_F) {
-      focusInput()
-      starTask()
-    } else if (addOnly) {
-      // Quick add is only the field: the rest needs the list.
-      return false
-    } else if (ctrl && (key === Qt.Key_Question || (key === Qt.Key_Slash && (mods & Qt.ShiftModifier)))) {
-      toggleShortcuts()
-    } else if (ctrl && key === Qt.Key_1) {
-      focusInput()
-      tab = "focus"
-    } else if (ctrl && !focusOnly && (key === Qt.Key_2 || key === Qt.Key_3)) {
-      focusInput()
-      tab = key === Qt.Key_2 ? "open" : "done"
-    } else if (mods === 0 && !shortcutsShown && !taskOpen && !newDescription.activeFocus
-               && (key === Qt.Key_Down || key === Qt.Key_Up)) {
-      moveSelection(key === Qt.Key_Down ? 1 : -1)
-    } else {
-      return false
-    }
-    return true
-  }
-
-  // Enter in the field with nothing typed opens the selected task. Only
-  // there: after adding a typed task, the field passes Enter on to the view.
-  function openOnEnter(event) {
-    var mods = event.modifiers & (Qt.ControlModifier | Qt.ShiftModifier | Qt.AltModifier | Qt.MetaModifier)
-    if (mods !== 0 || (event.key !== Qt.Key_Return && event.key !== Qt.Key_Enter)) return false
-    if (!selectedTask || shortcutsShown || taskOpen || input.text.trim() !== "") return false
-    openTask(selectedTask.id)
-    return true
+    send({ type: "back" })
   }
 
   function submit() {
-    if (!store || input.text.trim() === "") return
-    var id = store.add(input.text, newDescription.text, newDue, newStarred)
-    if (id === "") return
-    input.forceActiveFocus()
-    input.text = ""
-    newDescription.text = ""
-    describing = false
-    newDue = ""
-    newStarred = false
-    if (!addOnly) {
-      // Show the new task: in Focus when it belongs there, else in To do.
-      // The drop-down shows only Focus, so it stays there.
-      if (!focusOnly && !(tab === "focus" && Tasks.inFocus(Tasks.findTask(store.tasks, id), store.today)))
-        tab = "open"
-      Qt.callLater(revealTask, id)
-    }
-    // Last: quick add closes on it, which turns addOnly off.
-    added(id)
+    send({ type: "submit" })
   }
 
-  function describeNew() {
-    describing = true
-    newDescription.forceActiveFocus()
+  // Sends an event to the list rules and applies what they return. anchor:
+  // the item the date picker hangs from, when the event opens it. Returns
+  // whether the event did anything.
+  function send(event, anchor) {
+    if (!store) return false
+    var result = List.step(ui, event, {
+      surface: surface, rows: rows, typed: input.text, description: newDescription.text,
+      taskOpen: taskOpen, store: store
+    })
+    if (!result) return false
+    ui = result.state
+    var effects = result.effects
+    if (effects.hideTask) detail.hide()
+    if (effects.focus === "new") (ui.describing ? newDescription : input).forceActiveFocus()
+    else if (effects.focus === "title") input.forceActiveFocus()
+    else if (effects.focus === "description") newDescription.forceActiveFocus()
+    else if (effects.focus === "shortcuts") shortcuts.forceActiveFocus()
+    if (effects.clearTyped) {
+      input.text = ""
+      newDescription.text = ""
+    }
+    if (effects.scrollTop) flick.contentY = 0
+    if (effects.picker) openPicker(effects.picker, anchor)
+    if (effects.openTask) detail.show(effects.openTask)
+    if (effects.reveal) Qt.callLater(revealTask, effects.reveal)
+    if (effects.close) closeRequested()
+    // Last: quick add closes on it.
+    if (effects.added) added(effects.added)
+    return true
+  }
+
+  // A key in the title field (from "title", before the field handles it) or
+  // passed on to the view. Returns whether it was a shortcut.
+  function key(event, from) {
+    var name = keyName(event)
+    return name !== "" && send({ type: "key", name: name, from: from })
+  }
+
+  // The key as list.js names it; "" for a key that is no shortcut.
+  function keyName(event) {
+    var mods = event.modifiers & (Qt.ControlModifier | Qt.ShiftModifier | Qt.AltModifier | Qt.MetaModifier)
+    var key = event.key
+    if (key === Qt.Key_Escape) return "Escape"
+    if (mods & Qt.ControlModifier) {
+      if (key === Qt.Key_D) return "Ctrl+D"
+      if (key === Qt.Key_F) return "Ctrl+F"
+      if (key === Qt.Key_1) return "Ctrl+1"
+      if (key === Qt.Key_2) return "Ctrl+2"
+      if (key === Qt.Key_3) return "Ctrl+3"
+      if (key === Qt.Key_Question || (key === Qt.Key_Slash && (mods & Qt.ShiftModifier))) return "Ctrl+?"
+      return ""
+    }
+    if (mods !== 0) return ""
+    if (key === Qt.Key_Up) return "Up"
+    if (key === Qt.Key_Down) return "Down"
+    if (key === Qt.Key_Return || key === Qt.Key_Enter) return "Enter"
+    return ""
   }
 
   // The list row of the task with this id, or null.
@@ -254,11 +173,11 @@ FocusScope {
       flick.contentY = Math.max(0, Math.min(maxY, child.y + child.height - flick.height + Style.spacing.lg))
   }
 
-  function openPicker(target, current, anchor) {
-    pickerTarget = target
+  // request: { target, current } from list.js.
+  function openPicker(request, anchor) {
     picker.today = store.today
-    picker.anchorItem = anchor
-    picker.openFor(current)
+    picker.anchorItem = anchor || rowItemFor(request.target) || newDueButton
+    picker.openFor(request.current)
   }
 
   function dueColor(state) {
@@ -268,7 +187,7 @@ FocusScope {
   }
 
   Keys.onPressed: function(event) {
-    if (view.handleKey(event)) event.accepted = true
+    if (view.key(event, newDescription.activeFocus ? "description" : "other")) event.accepted = true
   }
 
   ColumnLayout {
@@ -279,42 +198,42 @@ FocusScope {
 
     RowLayout {
       Layout.fillWidth: true
-      visible: !view.addOnly
+      visible: !view.quickAdd
       spacing: Style.spacing.sm
 
       Ui.Button {
         iconText: ""
         text: "Focus  " + (view.store ? view.store.focusCount : 0)
         bordered: true
-        selected: view.tab === "focus"
+        selected: view.ui.tab === "focus"
         foreground: view.foreground
         fontFamily: view.fontFamily
-        tooltipText: view.focusOnly
-          ? "Starred and due today. All tasks are in the window (Super+Shift+Alt+T)."
-          : "Starred and due today (Ctrl+1)"
-        onClicked: view.tab = "focus"
+        tooltipText: view.inWindow
+          ? "Starred and due today (Ctrl+1)"
+          : "Starred and due today. All tasks are in the window (Super+Shift+Alt+T)."
+        onClicked: view.send({ type: "tab", tab: "focus" })
       }
       Ui.Button {
-        visible: !view.focusOnly
+        visible: view.inWindow
         iconText: ""
         text: "To do  " + (view.store ? view.store.openCount : 0)
         bordered: true
-        selected: view.tab === "open"
+        selected: view.ui.tab === "open"
         foreground: view.foreground
         fontFamily: view.fontFamily
         tooltipText: "Ctrl+2"
-        onClicked: view.tab = "open"
+        onClicked: view.send({ type: "tab", tab: "open" })
       }
       Ui.Button {
-        visible: !view.focusOnly
+        visible: view.inWindow
         iconText: ""
         text: "Done  " + (view.store ? view.store.doneCount : 0)
         bordered: true
-        selected: view.tab === "done"
+        selected: view.ui.tab === "done"
         foreground: view.foreground
         fontFamily: view.fontFamily
         tooltipText: "Ctrl+3"
-        onClicked: view.tab = "done"
+        onClicked: view.send({ type: "tab", tab: "done" })
       }
       Item { Layout.fillWidth: true }
       Ui.Button {
@@ -328,7 +247,7 @@ FocusScope {
         onClicked: view.updater.act()
       }
       Ui.Button {
-        visible: view.tab === "done" && view.store && view.store.doneCount > 0
+        visible: view.ui.tab === "done" && view.store && view.store.doneCount > 0
         iconText: ""
         text: "Clear done"
         foreground: view.foreground
@@ -340,10 +259,10 @@ FocusScope {
         foreground: view.foreground
         fontFamily: view.fontFamily
         tooltipText: "Keyboard shortcuts (Ctrl+?)"
-        onClicked: view.toggleShortcuts()
+        onClicked: view.send({ type: "shortcuts" })
       }
       Ui.Button {
-        visible: view.compact
+        visible: !view.inWindow
         iconText: ""
         text: "Esc"
         foreground: view.foreground
@@ -367,32 +286,32 @@ FocusScope {
         font.pixelSize: Style.font.body
         maximumLength: Tasks.MAX_TEXT_LENGTH
         onAccepted: view.submit()
-        onTextEdited: view.selectedId = ""
+        onTextEdited: view.send({ type: "typed" })
         // Before the field's own keys, so a shortcut never edits the text.
         Keys.onPressed: function(event) {
-          if (view.handleKey(event) || view.openOnEnter(event)) event.accepted = true
+          if (view.key(event, "title")) event.accepted = true
         }
-        Keys.onTabPressed: view.describeNew()
+        Keys.onTabPressed: view.send({ type: "describe" })
       }
       Ui.Button {
-        iconText: view.newStarred ? "" : ""
+        iconText: view.ui.newStarred ? "" : ""
         bordered: true
-        selected: view.newStarred
+        selected: view.ui.newStarred
         foreground: view.foreground
         fontFamily: view.fontFamily
         tooltipText: "Star (Ctrl+F)"
-        onClicked: view.newStarred = !view.newStarred
+        onClicked: view.send({ type: "starNew" })
       }
       Ui.Button {
         id: newDueButton
         iconText: ""
-        text: view.newDue ? Tasks.dueInfo(view.newDue, view.store.today).label : "Due"
+        text: view.ui.newDue ? Tasks.dueInfo(view.ui.newDue, view.store.today).label : "Due"
         bordered: true
-        selected: view.newDue !== ""
+        selected: view.ui.newDue !== ""
         foreground: view.foreground
         fontFamily: view.fontFamily
         tooltipText: "Due date (Ctrl+D)"
-        onClicked: view.pickNewDue()
+        onClicked: view.send({ type: "pickDue", id: "" }, newDueButton)
       }
       Ui.Button {
         iconText: ""
@@ -409,7 +328,7 @@ FocusScope {
     ScrollView {
       Layout.fillWidth: true
       Layout.preferredHeight: Math.min(Math.max(newDescription.implicitHeight, Style.space(64)), Style.space(160))
-      visible: view.describing
+      visible: view.ui.describing
 
       TextBox {
         id: newDescription
@@ -428,8 +347,8 @@ FocusScope {
         }
         Keys.onBacktabPressed: input.forceActiveFocus()
         // Typing unselects the task, as in the title field.
-        onTextChanged: if (activeFocus) view.selectedId = ""
-        onActiveFocusChanged: if (!activeFocus && text === "") view.describing = false
+        onTextChanged: if (activeFocus) view.send({ type: "typed" })
+        onActiveFocusChanged: if (!activeFocus) view.send({ type: "descriptionLeft", empty: text === "" })
       }
     }
 
@@ -446,7 +365,7 @@ FocusScope {
 
     Flickable {
       id: flick
-      visible: !view.addOnly
+      visible: !view.quickAdd
       Layout.fillWidth: true
       Layout.fillHeight: true
       Layout.preferredHeight: column.implicitHeight
@@ -488,8 +407,8 @@ FocusScope {
         wrapMode: Text.Wrap
         visible: view.rows.length === 0 && !!view.store && view.store.ready
         textFormat: Text.PlainText
-        text: view.tab === "focus" ? "Nothing starred or due today."
-          : view.tab === "open" ? "Nothing to do." : "Nothing done yet."
+        text: view.ui.tab === "focus" ? "Nothing starred or due today."
+          : view.ui.tab === "open" ? "Nothing to do." : "Nothing done yet."
         color: view.dim
         font.family: view.fontFamily
         font.pixelSize: Style.font.subtitle
@@ -553,7 +472,7 @@ FocusScope {
       readonly property var task: row ? row.task : null
       readonly property bool done: !!task && task.doneAt !== null
       readonly property var due: task ? Tasks.dueInfo(task.due, view.store.today) : ({ label: "", state: "" })
-      readonly property bool isSelected: !!task && task.id === view.selectedId
+      readonly property bool isSelected: !!task && task.id === view.ui.selectedId
 
       height: Math.max(Style.space(38), content.implicitHeight + Style.spacing.md * 2)
       radius: Math.max(2, Style.cornerRadius / 2)
@@ -568,7 +487,7 @@ FocusScope {
       MouseArea {
         anchors.fill: parent
         cursorShape: Qt.PointingHandCursor
-        onClicked: view.openTask(rowItem.task.id)
+        onClicked: view.send({ type: "open", id: rowItem.task.id })
       }
 
       RowLayout {
@@ -662,7 +581,7 @@ FocusScope {
             enabled: !rowItem.done
             hoverEnabled: true
             cursorShape: Qt.PointingHandCursor
-            onClicked: view.openPicker(rowItem.task.id, rowItem.task.due || "", dueChip)
+            onClicked: view.send({ type: "pickDue", id: rowItem.task.id }, dueChip)
           }
         }
 
@@ -727,9 +646,8 @@ FocusScope {
     id: shortcuts
     anchors.fill: parent
     z: 1
-    visible: view.shortcutsShown
-    compact: view.compact
-    focusOnly: view.focusOnly
+    visible: view.ui.shortcutsShown
+    surface: view.surface
     foreground: view.foreground
     background: view.background
     accent: view.accent
@@ -749,14 +667,7 @@ FocusScope {
     hoverFill: view.hoverFill
     fontFamily: view.fontFamily
     onPicked: function(due) {
-      var target = view.pickerTarget
-      if (target === "") {
-        view.newDue = due
-      } else {
-        view.store.setDue(target, due)
-        // The task may move to another section; keep the selection in view.
-        if (target === view.selectedId) Qt.callLater(view.revealTask, target)
-      }
+      view.send({ type: "picked", due: due })
     }
     onClosed: view.focusInput()
   }

@@ -161,16 +161,14 @@ Item {
         anchors.margins: Style.spacing.panelPadding
         store: store
         updater: updater
-        compact: true
-        addOnly: root.dropdownView === "add"
-        // The drop-down shows only Focus; the window has all tabs.
-        focusOnly: true
+        // The drop-down shows only Focus; quick add only the field.
+        surface: root.dropdownView === "add" ? "add" : "dropdown"
         focus: true
         // The picker may hang below a short card, but not over the bar.
         popupBounds: safeArea
         onCloseRequested: root.dismissDropdown()
         // Quick add is done once the task is in.
-        onAdded: if (addOnly) root.dismissDropdown()
+        onAdded: if (surface === "add") root.dismissDropdown()
       }
     }
   }
@@ -195,7 +193,7 @@ Item {
       anchors.margins: Style.spacing.panelPadding
       store: store
       updater: updater
-      compact: false
+      surface: "window"
       focus: true
       // Esc does not close the window; Super+W does, like any window.
       onCloseRequested: appView.focusInput()

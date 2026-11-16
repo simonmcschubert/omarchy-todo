@@ -132,10 +132,13 @@ The tasks file stays.
 - `tasks.js`: task logic (storage format, sorting, dates). Tests:
   `node --test`.
 - `Main.qml`: plugin entry: the drop-down, quick add, and the window.
+- `list.js`: the list's keyboard and selection rules: which task a key acts
+  on, and what adding a task does. Tests: `node --test`. Terms:
+  [CONTEXT.md](CONTEXT.md).
 - `TaskView.qml`, `TaskDetail.qml`, `DatePicker.qml`, `Shortcuts.qml`,
-  `TaskStore.qml`: the list (with `addOnly`, the quick add field), an opened
-  task, the date picker, the keyboard shortcuts box, loading and saving.
-  `TextBox.qml`: the text field for titles and descriptions.
+  `TaskStore.qml`: the list (in the window, the drop-down, or quick add), an
+  opened task, the date picker, the keyboard shortcuts box, loading and
+  saving. `TextBox.qml`: the text field for titles and descriptions.
 - `ErrorReports.qml`, `sentry.js`: error reports to Sentry (no SDK exists
   for QML; `sentry.js` builds the events, tested by `node --test`).
 - `update`, `Updater.qml`: finding, downloading, and installing releases, and
